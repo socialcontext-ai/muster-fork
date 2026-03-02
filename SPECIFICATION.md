@@ -22,7 +22,7 @@ The system is a dual-mode (GUI + CLI) tmux interface layer. tmux is the runtime.
 
 ### 2.1 Library vs. Application
 
-The terminal management core is implemented as a **standalone Rust library crate** (`termgroup` or similar), analogous to ParavaneFS. This library:
+The terminal management core is implemented as a **standalone Rust library crate** (`muster` or similar), analogous to ParavaneFS. This library:
 
 - Provides first-class **Rust tmux bindings** — command execution, output parsing, and control mode event streaming, with no external tmux library dependency
 - Manages terminal group profiles (CRUD on saved configurations)
@@ -37,7 +37,7 @@ Consumers of this library:
 
 | Consumer | Role |
 |----------|------|
-| **CLI binary** (`mdb-term` or subcommand) | Standalone terminal management from the shell |
+| **CLI binary** (`muster` or subcommand) | Standalone terminal management from the shell |
 | **Tauri application** | GUI integration — beacons, group launcher, settings |
 | **Tests** | Unit and integration tests against the library API |
 
@@ -49,7 +49,7 @@ There are exactly two sources of truth:
 
 | Source | Owns | Accessed by |
 |--------|------|-------------|
-| **tmux** | All running session state: windows, CWDs, active window, plus application metadata stored as user options (`@termgroup_name`, `@termgroup_color`, `@termgroup_profile`) | Library reads via control mode + CLI commands |
+| **tmux** | All running session state: windows, CWDs, active window, plus application metadata stored as user options (`@muster_name`, `@muster_color`, `@muster_profile`) | Library reads via control mode + CLI commands |
 | **Config directory** | Saved profiles (templates for creating sessions) and tool settings (emulator preference, paths) | Library reads/writes JSON files |
 
 There is no application-level cache of tmux state. There is no runtime state file. When the GUI or CLI needs to know what tabs a group has, it asks tmux. When it needs the group's color, it asks tmux. The config directory stores only user-authored configuration (profiles, settings), never derived or runtime state.
@@ -75,8 +75,8 @@ There is no application-level cache of tmux state. There is no runtime state fil
                │
         ┌──────▼──────┐         ┌──────────────┐
         │             │         │              │
-        │  termgroup  │◄────────│  CLI binary  │
-        │  (library)  │         │  (mdb-term)  │
+        │   muster    │◄────────│  CLI binary  │
+        │  (library)  │         │   (muster)   │
         │             │         │              │
         └──┬───────┬──┘         └──────────────┘
            │       │
@@ -108,14 +108,14 @@ There is no application-level cache of tmux state. There is no runtime state fil
 ### 3.1 Config Directory Layout
 
 ```
-~/.config/termgroup/
+~/.config/muster/
 ├── profiles.json             # Saved terminal group profiles
 └── settings.json             # Global settings (emulator preference, paths, etc.)
 ```
 
 That's it. No runtime state file. Running session metadata (name, color, profile reference) is stored as tmux user options on the session itself (see Section 4.6). When a session dies, its runtime metadata dies with it — the profile retains the original values.
 
-The config directory is owned by the library but the path is provided by the consumer at initialization. The CLI defaults to `~/.config/termgroup/`. The GUI app points the library at the same path, keeping its own non-terminal config (feeds, UI preferences) in a separate directory. This makes CLI and GUI true peers sharing the same profiles.
+The config directory is owned by the library but the path is provided by the consumer at initialization. The CLI defaults to `~/.config/muster/`. The GUI app points the library at the same path, keeping its own non-terminal config (feeds, UI preferences) in a separate directory. This makes CLI and GUI true peers sharing the same profiles.
 
 ### 3.2 Profile Schema (`profiles.json`)
 
@@ -151,22 +151,22 @@ Running session metadata is stored as **tmux user options** on the session itsel
 
 | tmux User Option | Value | Example |
 |-----------------|-------|---------|
-| `@termgroup_name` | Display name | `"PKM Project"` |
-| `@termgroup_color` | Hex color | `"#f97316"` |
-| `@termgroup_profile` | Profile ID (if launched from profile) | `"profile_abc123"` |
+| `@muster_name` | Display name | `"PKM Project"` |
+| `@muster_color` | Hex color | `"#f97316"` |
+| `@muster_profile` | Profile ID (if launched from profile) | `"profile_abc123"` |
 
 Set on session creation:
 ```bash
-tmux set-option -t mdb_abc123 @termgroup_name "PKM Project"
-tmux set-option -t mdb_abc123 @termgroup_color "#f97316"
-tmux set-option -t mdb_abc123 @termgroup_profile "profile_abc123"
+tmux set-option -t muster_abc123 @muster_name "PKM Project"
+tmux set-option -t muster_abc123 @muster_color "#f97316"
+tmux set-option -t muster_abc123 @muster_profile "profile_abc123"
 ```
 
 Queried at any time:
 ```bash
-tmux show-option -t mdb_abc123 -v @termgroup_color
+tmux show-option -t muster_abc123 -v @muster_color
 # or via format strings:
-tmux list-sessions -F '#{session_name} #{@termgroup_name} #{@termgroup_color}'
+tmux list-sessions -F '#{session_name} #{@muster_name} #{@muster_color}'
 ```
 
 This means tmux is the single source of truth for **all** running session state — both the runtime state it tracks natively (windows, CWDs, active window) and the application metadata we attach via user options. No separate state file, no reconciliation of file vs. tmux state, no concurrent write problems.
@@ -185,10 +185,10 @@ This means tmux is the single source of truth for **all** running session state 
 
 On library initialization (app startup or CLI invocation):
 
-1. Query tmux for all `mdb_*` sessions with their `@termgroup_*` user options
+1. Query tmux for all `muster_*` sessions with their `@muster_*` user options
 2. That's it — tmux is the source of truth, so there's nothing to reconcile against a file
 
-If a session exists in tmux with the `mdb_` prefix but is missing `@termgroup_*` options (e.g., created manually by the user, or options were cleared), the library treats it as an orphan and assigns defaults (name derived from session name, default color).
+If a session exists in tmux with the `muster_` prefix but is missing `@muster_*` options (e.g., created manually by the user, or options were cleared), the library treats it as an orphan and assigns defaults (name derived from session name, default color).
 
 For long-running library consumers (the GUI app), control mode connections established after initialization provide ongoing push-based state updates. Short-lived consumers (CLI commands) just query tmux directly — no persistent connection needed for one-shot operations.
 
@@ -198,9 +198,9 @@ For long-running library consumers (the GUI app), control mode connections estab
 
 ### 4.1 Session Naming Convention
 
-All managed sessions use the prefix `mdb_` followed by the profile ID:
+All managed sessions use the prefix `muster_` followed by the profile ID:
 ```
-mdb_profile_abc123
+muster_profile_abc123
 ```
 
 This allows the library to distinguish managed sessions from the user's personal tmux sessions.
@@ -284,10 +284,10 @@ tmux control mode defines the following notifications. The library consumes the 
 ### 4.5 Session Lifecycle
 
 **Creating a group from a profile:**
-1. `tmux new-session -d -s mdb_<profile_id> -n <tab_0_name> -c <tab_0_cwd>`
-2. For each additional tab: `tmux new-window -t mdb_<profile_id> -n <name> -c <cwd>`
-3. For tabs with startup commands: `tmux send-keys -t mdb_<profile_id>:<index> '<command>' Enter`
-4. Set user options: `@termgroup_name`, `@termgroup_color`, `@termgroup_profile` (see Section 3.3)
+1. `tmux new-session -d -s muster_<profile_id> -n <tab_0_name> -c <tab_0_cwd>`
+2. For each additional tab: `tmux new-window -t muster_<profile_id> -n <name> -c <cwd>`
+3. For tabs with startup commands: `tmux send-keys -t muster_<profile_id>:<index> '<command>' Enter`
+4. Set user options: `@muster_name`, `@muster_color`, `@muster_profile` (see Section 3.3)
 5. Apply color theme (Section 6)
 6. Open control mode connection
 7. Launch emulator attached to the session
@@ -377,7 +377,7 @@ tmux set-option -t <session> status-position top
 
 When the user changes a group's color (via GUI or CLI):
 
-1. Update the tmux user option: `tmux set-option -t <session> @termgroup_color "<new_color>"`
+1. Update the tmux user option: `tmux set-option -t <session> @muster_color "<new_color>"`
 2. Re-apply the styling commands immediately (the status bar updates instantly)
 3. Emit event to GUI for beacon/UI color update
 
@@ -460,7 +460,7 @@ The library does not forcibly override user configuration. It provides:
 ### 8.2 Operations
 
 **List groups:**
-Query tmux for `mdb_*` sessions with their `@termgroup_*` user options. Merge with profiles from `profiles.json` where a profile reference exists.
+Query tmux for `muster_*` sessions with their `@muster_*` user options. Merge with profiles from `profiles.json` where a profile reference exists.
 
 **Open group:**
 If session exists → launch emulator attached to it. If session doesn't exist but profile exists → create session from profile, then launch emulator. Optionally switch to a specific tab by index.
@@ -499,7 +499,7 @@ For each active session, a control mode connection delivers:
 The library translates these into application events that the GUI consumes:
 
 ```rust
-pub enum TermGroupEvent {
+pub enum MusterEvent {
     // Core events
     TabAdded { session: String, window_index: u32, name: String },
     TabClosed { session: String, window_index: u32 },
@@ -536,7 +536,7 @@ The key point: even in the worst case (option 3), the polling is limited to a si
 
 The Tauri application layer:
 1. Calls library initialization on app startup (reconciles state)
-2. Subscribes to `TermGroupEvent` stream
+2. Subscribes to `MusterEvent` stream
 3. On each event: queries library for current group state, emits to frontend via Tauri event
 4. Frontend replaces its state reactively (same `groups-updated` pattern, but now backed by tmux truth)
 
@@ -553,13 +553,13 @@ The Tauri application layer:
 ### 10.1 Core API
 
 ```rust
-pub struct TermGroup {
+pub struct Muster {
     config_dir: PathBuf,
     tmux: TmuxClient,
     emulator: Box<dyn Emulator>,
 }
 
-impl TermGroup {
+impl Muster {
     /// Initialize: discover tmux, reconcile state, connect control mode.
     pub async fn init(config_dir: PathBuf, settings: Settings) -> Result<Self, Error>;
 
@@ -586,7 +586,7 @@ impl TermGroup {
 
     // --- State observation ---
     pub async fn get_session_state(&self, session: &str) -> Result<SessionState, Error>;
-    pub fn subscribe(&self) -> broadcast::Receiver<TermGroupEvent>;
+    pub fn subscribe(&self) -> broadcast::Receiver<MusterEvent>;
 
     // --- Emulator ---
     pub async fn open_emulator(&self, session: &str) -> Result<(), Error>;
@@ -646,7 +646,7 @@ The library is testable at multiple levels:
 - Tab operations: add, close, rename, verify via tmux queries
 - Theme application: set color, verify tmux options
 - Control mode: connect, receive events on window add/close
-- Startup discovery: create sessions externally with `@termgroup_*` options, verify library discovers them
+- Startup discovery: create sessions externally with `@muster_*` options, verify library discovers them
 
 **Integration tests mock the `Emulator` trait** — they test the library's tmux interaction without launching any GUI windows.
 
@@ -657,17 +657,17 @@ The library is testable at multiple levels:
 ### 11.1 Commands
 
 ```
-mdb-term list                              # List profiles and running sessions
-mdb-term launch <profile-name-or-id>       # Launch or attach to a profile's session
-mdb-term attach <session-name>             # Attach to a running session
-mdb-term new <name> [--cwd <dir>] [--color <hex>]  # Create ad-hoc group
-mdb-term kill <session-name>               # Destroy a session
-mdb-term add-tab <session> [--cwd <dir>] [--name <name>] [--command <cmd>]
-mdb-term profile save <name> [--from-session <name>]  # Save current session as profile
-mdb-term profile list
-mdb-term profile delete <name-or-id>
-mdb-term color <session> <hex-color>       # Change session color live
-mdb-term status                            # Show all sessions with window counts, CWDs
+muster list                              # List profiles and running sessions
+muster launch <profile-name-or-id>       # Launch or attach to a profile's session
+muster attach <session-name>             # Attach to a running session
+muster new <name> [--cwd <dir>] [--color <hex>]  # Create ad-hoc group
+muster kill <session-name>               # Destroy a session
+muster add-tab <session> [--cwd <dir>] [--name <name>] [--command <cmd>]
+muster profile save <name> [--from-session <name>]  # Save current session as profile
+muster profile list
+muster profile delete <name-or-id>
+muster color <session> <hex-color>       # Change session color live
+muster status                            # Show all sessions with window counts, CWDs
 ```
 
 ### 11.2 Behavior
@@ -687,7 +687,7 @@ Human-readable by default. `--json` flag for machine-readable output (used by th
 
 ### 12.1 Dependency
 
-The Tauri app depends on the `termgroup` library crate. It does NOT shell out to the CLI. The CLI and the Tauri app are independent consumers of the same library.
+The Tauri app depends on the `muster` library crate. It does NOT shell out to the CLI. The CLI and the Tauri app are independent consumers of the same library.
 
 ### 12.2 Tauri Commands
 
@@ -695,12 +695,12 @@ Tauri command handlers become thin wrappers around library calls:
 
 ```rust
 #[tauri::command]
-async fn group_list(tg: State<'_, Arc<TermGroup>>) -> Result<Vec<SessionInfo>, String> {
+async fn group_list(tg: State<'_, Arc<Muster>>) -> Result<Vec<SessionInfo>, String> {
     tg.list_sessions().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn group_launch(tg: State<'_, Arc<TermGroup>>, profile_id: String) -> Result<SessionInfo, String> {
+async fn group_launch(tg: State<'_, Arc<Muster>>, profile_id: String) -> Result<SessionInfo, String> {
     tg.launch(&profile_id).await.map_err(|e| e.to_string())
 }
 ```
@@ -711,12 +711,12 @@ The Tauri app subscribes to the library's event stream and forwards to the front
 
 ```rust
 // In app setup:
-let mut rx = termgroup.subscribe();
+let mut rx = muster.subscribe();
 let handle = app.handle().clone();
 tauri::async_runtime::spawn(async move {
     while let Ok(event) = rx.recv().await {
         // Query current state and emit to frontend
-        let sessions = termgroup.list_sessions().await.unwrap_or_default();
+        let sessions = muster.list_sessions().await.unwrap_or_default();
         handle.emit("groups-updated", &sessions).ok();
     }
 });
@@ -728,7 +728,7 @@ The file browser queries the library for active sessions and their tab CWDs:
 
 ```rust
 #[tauri::command]
-async fn get_active_cwds(tg: State<'_, Arc<TermGroup>>) -> Result<Vec<BeaconInfo>, String> {
+async fn get_active_cwds(tg: State<'_, Arc<Muster>>) -> Result<Vec<BeaconInfo>, String> {
     let sessions = tg.list_sessions().await.map_err(|e| e.to_string())?;
     let beacons: Vec<BeaconInfo> = sessions.iter()
         .flat_map(|s| s.windows.iter().map(move |w| BeaconInfo {
@@ -838,9 +838,9 @@ The minimum viable library. Everything needed for session group lifecycle manage
 - Session lifecycle (create from profile, destroy, attach)
 - Window/tab management (add, close, switch, rename)
 - Runtime theming (per-session color application to tmux status bar)
-- Session metadata via tmux user options (`@termgroup_name`, `@termgroup_color`, `@termgroup_profile`)
+- Session metadata via tmux user options (`@muster_name`, `@muster_color`, `@muster_profile`)
 - State reconciliation on startup
-- Event subscription (`broadcast::Receiver<TermGroupEvent>`)
+- Event subscription (`broadcast::Receiver<MusterEvent>`)
 - Emulator trait + Ghostty implementation
 - CLI binary with core commands (list, launch, attach, kill, new, color, status)
 
@@ -848,13 +848,13 @@ The minimum viable library. Everything needed for session group lifecycle manage
 
 Each feature is self-contained and builds on the core without modifying it. Ordered roughly by value and implementation simplicity.
 
-**Session snapshotting** — Capture a running session's current windows, CWDs, and layout into a profile. Implementation: query `list-windows` with format string to get window names, CWDs, and pane count, then serialize to a `Profile`. CLI: `mdb-term profile save --from-session <name>`. Library: `save_profile_from_session(session: &str) -> Result<Profile, Error>`.
+**Session snapshotting** — Capture a running session's current windows, CWDs, and layout into a profile. Implementation: query `list-windows` with format string to get window names, CWDs, and pane count, then serialize to a `Profile`. CLI: `muster profile save --from-session <name>`. Library: `save_profile_from_session(session: &str) -> Result<Profile, Error>`.
 
-**Process status tracking** — Expose whether the process in each pane is alive or dead. tmux tracks this natively (`pane_dead`, `pane_pid`). Implementation: include `is_alive: bool` in `WindowInfo`, populated from `list-windows` format strings. The `pane-exited` hook / control mode notification can push updates. Useful for both CLI (`mdb-term status` shows dead processes) and GUI (beacon changes to indicate a crashed dev server).
+**Process status tracking** — Expose whether the process in each pane is alive or dead. tmux tracks this natively (`pane_dead`, `pane_pid`). Implementation: include `is_alive: bool` in `WindowInfo`, populated from `list-windows` format strings. The `pane-exited` hook / control mode notification can push updates. Useful for both CLI (`muster status` shows dead processes) and GUI (beacon changes to indicate a crashed dev server).
 
 **Output capture** — Per-pane output streaming for routing terminal output to an application log console. Control mode supports this natively: `refresh-client -A '%<pane-id>:on'` enables `%output` notifications for a specific pane while all others remain suppressed. Implementation: `subscribe_output(session: &str, window_index: u32) -> broadcast::Receiver<OutputEvent>` enables output for that pane, `unsubscribe_output` re-suppresses it. This is opt-in per pane, not global — the default remains suppressed.
 
-**Session adoption** — Bring existing (non-managed) tmux sessions under management. Implementation: rename session to add `mdb_` prefix, set `@termgroup_*` user options. No file writes needed. CLI: `mdb-term adopt <session-name> --color '#f97316' --name 'My Project'`. Library: `adopt(session_name: &str, name: &str, color: &str) -> Result<SessionInfo, Error>`.
+**Session adoption** — Bring existing (non-managed) tmux sessions under management. Implementation: rename session to add `muster_` prefix, set `@muster_*` user options. No file writes needed. CLI: `muster adopt <session-name> --color '#f97316' --name 'My Project'`. Library: `adopt(session_name: &str, name: &str, color: &str) -> Result<SessionInfo, Error>`.
 
 **Pane layouts** — Extend profiles to define split panes within a tab. tmux supports `split-window` and named layouts (`main-vertical`, `tiled`, etc.). Implementation: add optional `panes: Vec<PaneProfile>` to `TabProfile`, apply via `split-window` + `select-layout` during session creation. This is the feature tmuxinator/tmuxp users expect.
 
@@ -862,7 +862,7 @@ Each feature is self-contained and builds on the core without modifying it. Orde
 
 **Per-session tmux config** — Manage tmux settings (mouse, key bindings, status bar position) per session without touching the user's global `~/.tmux.conf`. All via `set-option -t <session>`. Implementation: add optional `tmux_options: HashMap<String, String>` to profile or settings, apply during session creation.
 
-**Shell integration** — A shell hook that detects when the user `cd`s into a directory associated with a profile and suggests launching. Implementation: `mdb-term shell-init <shell>` outputs a shell function that queries profiles on directory change. Supports fish, bash, zsh.
+**Shell integration** — A shell hook that detects when the user `cd`s into a directory associated with a profile and suggests launching. Implementation: `muster shell-init <shell>` outputs a shell function that queries profiles on directory change. Supports fish, bash, zsh.
 
 ### 14.3 Architectural Considerations for Post-Core
 
@@ -873,5 +873,5 @@ The core architecture naturally supports these features without restructuring be
 - **Session snapshotting** is a read-only operation on existing tmux queries → profile serialization
 - **Pane layouts** extend the session creation flow (additional `split-window` commands after `new-window`)
 - **Environment variables and tmux config** are additional `set-environment` / `set-option` commands in the session creation flow
-- **Session adoption** is metadata operations (`rename-session` + `set-option @termgroup_*`)
+- **Session adoption** is metadata operations (`rename-session` + `set-option @muster_*`)
 - **Shell integration** is a CLI-only feature that queries profiles — no library changes needed
