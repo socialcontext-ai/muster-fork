@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod error;
+pub mod session;
 pub mod tmux;
 
 pub use config::{Profile, ProfileStore, TabProfile};

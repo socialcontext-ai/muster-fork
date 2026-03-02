@@ -71,6 +71,19 @@ impl TmuxClient {
         Ok(())
     }
 
+    /// Create a new window in a session.
+    pub fn new_window(&self, session: &str, name: &str, cwd: &str) -> Result<()> {
+        self.cmd(&["new-window", "-t", session, "-n", name, "-c", cwd])?;
+        Ok(())
+    }
+
+    /// Send keys (a command) to a specific window in a session.
+    pub fn send_keys(&self, session: &str, window_index: u32, keys: &str) -> Result<()> {
+        let target = format!("{session}:{window_index}");
+        self.cmd(&["send-keys", "-t", &target, keys, "Enter"])?;
+        Ok(())
+    }
+
     /// Check if a session exists.
     pub fn has_session(&self, name: &str) -> Result<bool> {
         let output = Command::new(&self.tmux_path)
