@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{Error, Result};
-use crate::tmux::types::{TmuxSession, TmuxWindow};
+use crate::tmux::types::{SessionInfo, TmuxSession, TmuxWindow};
 
 /// Prefix for all muster-managed tmux sessions.
 pub const SESSION_PREFIX: &str = "muster_";
@@ -130,6 +130,109 @@ impl TmuxClient {
         Ok(Self::parse_window_list(&output))
     }
 
+    // ---- User option (metadata) methods ----
+
+    /// Set a tmux user option on a session.
+    pub fn set_option(&self, session: &str, key: &str, value: &str) -> Result<()> {
+        self.cmd(&["set-option", "-t", session, key, value])?;
+        Ok(())
+    }
+
+    /// Get a tmux user option from a session. Returns None if the option is not set.
+    pub fn get_option(&self, session: &str, key: &str) -> Result<Option<String>> {
+        let output = Command::new(&self.tmux_path)
+            .args(["show-option", "-t", session, "-v", key])
+            .output()
+            .map_err(|e| Error::TmuxError(format!("failed to spawn tmux: {e}")))?;
+
+        if output.status.success() {
+            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if value.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        } else {
+            // Option not set — not an error
+            Ok(None)
+        }
+    }
+
+    /// Set all muster metadata options on a session.
+    pub fn set_session_metadata(
+        &self,
+        session: &str,
+        name: &str,
+        color: &str,
+        profile_id: Option<&str>,
+    ) -> Result<()> {
+        self.set_option(session, "@muster_name", name)?;
+        self.set_option(session, "@muster_color", color)?;
+        if let Some(pid) = profile_id {
+            self.set_option(session, "@muster_profile", pid)?;
+        }
+        Ok(())
+    }
+
+    /// List managed sessions with their @muster_* metadata.
+    pub fn list_sessions_with_metadata(&self) -> Result<Vec<SessionInfo>> {
+        let format = [
+            "#{session_name}",
+            "#{session_windows}",
+            "#{session_attached}",
+            "#{@muster_name}",
+            "#{@muster_color}",
+            "#{@muster_profile}",
+        ]
+        .join("\t");
+        let output = self.cmd(&["list-sessions", "-F", &format])?;
+        Ok(Self::parse_session_info_list(&output))
+    }
+
+    /// Parse list-sessions output that includes @muster_* metadata.
+    pub fn parse_session_info_list(output: &str) -> Vec<SessionInfo> {
+        output
+            .lines()
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() < 6 {
+                    return None;
+                }
+                let session_name = parts[0];
+                if !session_name.starts_with(SESSION_PREFIX) {
+                    return None;
+                }
+                let display_name = if parts[3].is_empty() {
+                    session_name
+                        .strip_prefix(SESSION_PREFIX)
+                        .unwrap_or(session_name)
+                        .to_string()
+                } else {
+                    parts[3].to_string()
+                };
+                let color = if parts[4].is_empty() {
+                    "#808080".to_string()
+                } else {
+                    parts[4].to_string()
+                };
+                let profile_id = if parts[5].is_empty() {
+                    None
+                } else {
+                    Some(parts[5].to_string())
+                };
+                Some(SessionInfo {
+                    session_name: session_name.to_string(),
+                    display_name,
+                    color,
+                    profile_id,
+                    window_count: parts[1].parse().unwrap_or(0),
+                    attached: parts[2] != "0",
+                })
+            })
+            .collect()
+    }
+
     /// Parse `list-windows -F` output into structured data.
     pub fn parse_window_list(output: &str) -> Vec<TmuxWindow> {
         output
@@ -225,6 +328,34 @@ mod tests {
         assert_eq!(managed[1].name, "muster_def456");
     }
 
+    #[test]
+    fn test_parse_session_info_with_metadata() {
+        let output =
+            "muster_abc123\t3\t1\tPKM Project\t#f97316\tprofile_abc123\npersonal\t1\t0\t\t\t\n";
+        let sessions = TmuxClient::parse_session_info_list(output);
+
+        // Only muster_ sessions are included
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_name, "muster_abc123");
+        assert_eq!(sessions[0].display_name, "PKM Project");
+        assert_eq!(sessions[0].color, "#f97316");
+        assert_eq!(sessions[0].profile_id, Some("profile_abc123".to_string()));
+        assert_eq!(sessions[0].window_count, 3);
+        assert!(sessions[0].attached);
+    }
+
+    #[test]
+    fn test_parse_session_info_without_metadata() {
+        let output = "muster_orphan\t1\t0\t\t\t\n";
+        let sessions = TmuxClient::parse_session_info_list(output);
+
+        assert_eq!(sessions.len(), 1);
+        // Defaults: name derived from session, default color, no profile
+        assert_eq!(sessions[0].display_name, "orphan");
+        assert_eq!(sessions[0].color, "#808080");
+        assert_eq!(sessions[0].profile_id, None);
+    }
+
     // ---- Integration tests (need real tmux) ----
 
     #[test]
@@ -285,6 +416,82 @@ mod tests {
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].name, "first");
         assert_eq!(windows[0].index, 0);
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_set_and_get_user_option() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp")
+            .expect("create session");
+
+        client
+            .set_option(&session_name, "@muster_name", "Test Project")
+            .expect("set option");
+        let value = client
+            .get_option(&session_name, "@muster_name")
+            .expect("get option");
+        assert_eq!(value, Some("Test Project".to_string()));
+
+        // Non-existent option returns None
+        let missing = client
+            .get_option(&session_name, "@muster_nonexistent")
+            .expect("get missing option");
+        assert!(missing.is_none());
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_session_with_metadata() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp")
+            .expect("create session");
+
+        client
+            .set_session_metadata(&session_name, "My Project", "#ff6600", Some("profile_123"))
+            .expect("set metadata");
+
+        let name = client.get_option(&session_name, "@muster_name").unwrap();
+        let color = client.get_option(&session_name, "@muster_color").unwrap();
+        let profile = client.get_option(&session_name, "@muster_profile").unwrap();
+
+        assert_eq!(name, Some("My Project".to_string()));
+        assert_eq!(color, Some("#ff6600".to_string()));
+        assert_eq!(profile, Some("profile_123".to_string()));
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_list_sessions_with_metadata() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp")
+            .expect("create session");
+
+        client
+            .set_session_metadata(&session_name, "Listed Project", "#00ff00", None)
+            .expect("set metadata");
+
+        let sessions = client
+            .list_sessions_with_metadata()
+            .expect("list with metadata");
+        let found = sessions.iter().find(|s| s.session_name == session_name);
+        assert!(found.is_some());
+        let s = found.unwrap();
+        assert_eq!(s.display_name, "Listed Project");
+        assert_eq!(s.color, "#00ff00");
+        assert!(s.profile_id.is_none());
 
         client.kill_session(&session_name).ok();
     }

@@ -7,4 +7,4 @@ pub mod error;
 pub mod tmux;
 
 pub use error::{Error, Result};
-pub use tmux::{TmuxClient, TmuxSession, TmuxWindow};
+pub use tmux::{SessionInfo, TmuxClient, TmuxSession, TmuxWindow};
