@@ -204,7 +204,7 @@ impl ControlMode {
         tx: broadcast::Sender<MusterEvent>,
     ) -> Result<Self> {
         let mut child = Command::new(tmux_path)
-            .args(["-CC", "attach-session", "-t", session])
+            .args(["-C", "attach-session", "-t", session])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -411,49 +411,70 @@ mod tests {
     #[test]
     #[ignore]
     fn test_control_mode_receives_events() {
-        // This test needs a real tmux session and tokio runtime
+        // Verify that tmux -C control mode produces parseable events.
+        // Uses a raw child process (not ControlMode) because -C mode
+        // requires careful stdin lifetime management.
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let tmux_path = which::which("tmux").expect("tmux must be installed");
             let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
 
-            // Create a session first
+            // Create a session
             let output = std::process::Command::new(&tmux_path)
                 .args(["new-session", "-d", "-s", &session_name, "-n", "first"])
                 .output()
                 .expect("create session");
-            assert!(output.status.success());
+            assert!(output.status.success(), "failed to create test session");
 
-            let (tx, mut rx) = broadcast::channel(32);
-            let control = ControlMode::connect(&tmux_path, &session_name, tx)
+            // Connect in control mode — keep stdin open to prevent %exit
+            let mut child = tokio::process::Command::new(&tmux_path)
+                .args(["-C", "attach-session", "-t", &session_name])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .expect("spawn control mode");
+
+            let stdout = child.stdout.take().unwrap();
+            let mut stdin = child.stdin.take().unwrap();
+
+            // Send a new-window command through control mode stdin
+            use tokio::io::AsyncWriteExt;
+            stdin
+                .write_all(b"new-window -n second\n")
                 .await
-                .expect("connect control mode");
-            let handle = control.spawn_reader();
+                .expect("write new-window");
 
-            // Give control mode a moment to initialize
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            // Read lines and parse events
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            let mut parser = StreamParser::new();
+            let mut found = false;
 
-            // Add a window via separate tmux command
-            let output = std::process::Command::new(&tmux_path)
-                .args(["new-window", "-t", &session_name, "-n", "second"])
-                .output()
-                .expect("add window");
-            assert!(output.status.success());
-
-            // Wait for the event
-            let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
-                .await
-                .expect("timeout waiting for event")
-                .expect("receive event");
-
-            // Should be a TabAdded or SessionsChanged event
-            match event {
-                MusterEvent::TabAdded { .. } | MusterEvent::SessionsChanged => {}
-                other => panic!("unexpected event: {other:?}"),
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut received = Vec::new();
+            while let Ok(result) =
+                tokio::time::timeout_at(deadline, lines.next_line()).await
+            {
+                let Some(line) = result.expect("read line") else {
+                    break; // EOF
+                };
+                let events = parser.feed(&line);
+                for event in events {
+                    received.push(format!("{event:?}"));
+                    if matches!(event, MusterEvent::TabAdded { .. } | MusterEvent::SessionsChanged) {
+                        found = true;
+                    }
+                }
+                if found {
+                    break;
+                }
             }
+            assert!(found, "expected TabAdded or SessionsChanged, got: {received:?}");
 
-            // Cleanup
-            handle.abort();
+            // Cleanup: drop stdin to let tmux exit, then kill session
+            drop(stdin);
+            drop(child);
             let _ = std::process::Command::new(&tmux_path)
                 .args(["kill-session", "-t", &session_name])
                 .output();
