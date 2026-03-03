@@ -61,7 +61,16 @@ impl TmuxClient {
         cwd: &str,
         shell: Option<&str>,
     ) -> Result<()> {
-        let mut args = vec!["new-session", "-d", "-s", name, "-n", first_window_name, "-c", cwd];
+        let mut args = vec![
+            "new-session",
+            "-d",
+            "-s",
+            name,
+            "-n",
+            first_window_name,
+            "-c",
+            cwd,
+        ];
         if let Some(sh) = shell {
             args.push(sh);
         }

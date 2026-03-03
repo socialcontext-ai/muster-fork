@@ -131,8 +131,7 @@ impl Muster {
         let shell = session::resolve_shell(settings.shell.as_deref());
 
         // Create from profile
-        let info =
-            session::create_from_profile(&self.client, &profile, shell.as_deref())?;
+        let info = session::create_from_profile(&self.client, &profile, shell.as_deref())?;
 
         // Apply theme
         session::theme::apply_theme(
