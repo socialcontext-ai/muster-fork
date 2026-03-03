@@ -52,8 +52,9 @@ impl TmuxClient {
 
     /// Create a new detached session.
     ///
-    /// If `shell` is provided, it is used as the shell command for the initial window
-    /// (instead of tmux's `default-shell`).
+    /// Propagates the current process environment to the initial pane via `-e` flags,
+    /// since tmux otherwise inherits from the (potentially stale) server environment.
+    /// If `shell` is provided, it is used as the shell command for the initial window.
     pub fn new_session(
         &self,
         name: &str,
@@ -61,7 +62,15 @@ impl TmuxClient {
         cwd: &str,
         shell: Option<&str>,
     ) -> Result<()> {
+        let env_pairs: Vec<String> = std::env::vars()
+            .filter(|(k, _)| !k.starts_with("TMUX") && k != "TERM")
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
         let mut args = vec!["new-session", "-d", "-s", name, "-n", first_window_name, "-c", cwd];
+        for pair in &env_pairs {
+            args.push("-e");
+            args.push(pair);
+        }
         if let Some(sh) = shell {
             args.push(sh);
         }

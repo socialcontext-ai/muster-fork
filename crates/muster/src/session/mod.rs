@@ -46,6 +46,14 @@ pub fn create_from_profile(
         client.set_option(&session_name, "default-command", sh)?;
     }
 
+    // Propagate current environment to the session so new panes/windows inherit it
+    for (key, value) in std::env::vars() {
+        if key.starts_with("TMUX") || key == "TERM" {
+            continue;
+        }
+        client.set_environment(&session_name, &key, &value)?;
+    }
+
     // Send startup command for first tab if specified
     if let Some(ref cmd) = first_tab.command {
         client.send_keys(&session_name, 0, cmd)?;
