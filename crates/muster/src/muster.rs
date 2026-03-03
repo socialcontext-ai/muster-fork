@@ -2,14 +2,14 @@ use std::path::{Path, PathBuf};
 
 use tokio::sync::broadcast;
 
-use crate::config::profile::{Profile, ProfileStore};
+use crate::config::profile::{Profile, ProfileStore, TabProfile};
 use crate::config::settings::{Settings, SettingsStore};
 use crate::emulator::{Emulator, GhosttyEmulator};
 use crate::error::{Error, Result};
 use crate::session;
 use crate::tmux::client::TmuxClient;
 use crate::tmux::control::MusterEvent;
-use crate::tmux::types::SessionInfo;
+use crate::tmux::types::{PaneContext, SessionInfo};
 
 /// Main facade for the muster library.
 ///
@@ -195,6 +195,180 @@ impl Muster {
 
     pub fn rename_window(&self, session: &str, window_index: u32, name: &str) -> Result<()> {
         self.client.rename_window(session, window_index, name)
+    }
+
+    // --- Pin / Unpin ---
+
+    /// Count pinned windows in `session` whose index is less than `window_index`.
+    /// This gives the profile tab position for the window.
+    fn pinned_rank(&self, session: &str, window_index: u32) -> Result<usize> {
+        let windows = self.client.list_windows(session)?;
+        let count = windows
+            .iter()
+            .filter(|w| w.index < window_index)
+            .filter(|w| {
+                self.client
+                    .get_window_option(session, w.index, "@muster_pinned")
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
+            .count();
+        Ok(count)
+    }
+
+    /// Resolve the pane context for the current tmux pane (reads `$TMUX_PANE`).
+    pub fn resolve_current_pane(&self) -> Result<PaneContext> {
+        let pane_id = std::env::var("TMUX_PANE").map_err(|_| Error::NotInTmux)?;
+        self.client.resolve_pane_context(&pane_id)
+    }
+
+    /// Pin the current window to the session's profile.
+    pub fn pin_window(&self) -> Result<()> {
+        let ctx = self.resolve_current_pane()?;
+
+        // Must be a muster-managed session
+        let profile_id = self
+            .client
+            .get_option(&ctx.session_name, "@muster_profile")?
+            .ok_or(Error::NotMusterSession)?;
+
+        // Already pinned — no-op
+        if self
+            .client
+            .get_window_option(&ctx.session_name, ctx.window_index, "@muster_pinned")?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        // Insert tab at the position matching its rank among pinned windows
+        let mut profile = self
+            .profiles
+            .get(&profile_id)?
+            .ok_or_else(|| Error::ProfileNotFound(profile_id.clone()))?;
+
+        let insert_pos = self
+            .pinned_rank(&ctx.session_name, ctx.window_index)?
+            .min(profile.tabs.len());
+        profile.tabs.insert(
+            insert_pos,
+            TabProfile {
+                name: ctx.window_name.clone(),
+                cwd: ctx.cwd.clone(),
+                command: None,
+            },
+        );
+        self.profiles.update(profile)?;
+
+        // Apply colored styling
+        let color = self
+            .client
+            .get_option(&ctx.session_name, "@muster_color")?
+            .unwrap_or_else(|| "#808080".to_string());
+        let display_name = self
+            .client
+            .get_option(&ctx.session_name, "@muster_name")?
+            .unwrap_or_else(|| ctx.session_name.clone());
+
+        session::theme::apply_pinned_window_style(
+            &self.client,
+            &ctx.session_name,
+            ctx.window_index,
+            &color,
+            &display_name,
+        )?;
+
+        // Track the tab name so rename sync can find the right profile entry
+        self.client.set_window_option(
+            &ctx.session_name,
+            ctx.window_index,
+            "@muster_tab_name",
+            &ctx.window_name,
+        )?;
+
+        Ok(())
+    }
+
+    /// Unpin the current window from the session's profile.
+    pub fn unpin_window(&self) -> Result<()> {
+        let ctx = self.resolve_current_pane()?;
+
+        // Must be a muster-managed session
+        let profile_id = self
+            .client
+            .get_option(&ctx.session_name, "@muster_profile")?
+            .ok_or(Error::NotMusterSession)?;
+
+        // Not pinned — no-op
+        if self
+            .client
+            .get_window_option(&ctx.session_name, ctx.window_index, "@muster_pinned")?
+            .is_none()
+        {
+            return Ok(());
+        }
+
+        // Remove tab by positional rank (avoids ambiguity when names collide)
+        let mut profile = self
+            .profiles
+            .get(&profile_id)?
+            .ok_or_else(|| Error::ProfileNotFound(profile_id.clone()))?;
+
+        let tab_pos = self.pinned_rank(&ctx.session_name, ctx.window_index)?;
+        if tab_pos < profile.tabs.len() {
+            profile.tabs.remove(tab_pos);
+        }
+        self.profiles.update(profile)?;
+
+        // Apply neutral styling (also removes @muster_pinned)
+        session::theme::apply_neutral_window_style(
+            &self.client,
+            &ctx.session_name,
+            ctx.window_index,
+        )?;
+
+        Ok(())
+    }
+
+    // --- Rename sync ---
+
+    /// Sync a window rename to the profile. Called by the `after-rename-window` hook.
+    pub fn sync_rename(&self, session: &str, window_index: u32, new_name: &str) -> Result<()> {
+        // Must be a muster-managed session with a profile
+        let Some(profile_id) = self.client.get_option(session, "@muster_profile")? else {
+            return Ok(());
+        };
+
+        // Only sync pinned windows
+        if self
+            .client
+            .get_window_option(session, window_index, "@muster_pinned")?
+            .is_none()
+        {
+            return Ok(());
+        }
+
+        // Find the tab by positional rank (avoids ambiguity when names collide)
+        let tab_pos = self.pinned_rank(session, window_index)?;
+
+        let Some(mut profile) = self.profiles.get(&profile_id)? else {
+            return Ok(());
+        };
+
+        if let Some(tab) = profile.tabs.get_mut(tab_pos) {
+            if tab.name == new_name {
+                return Ok(());
+            }
+            tab.name = new_name.to_string();
+        }
+        self.profiles.update(profile)?;
+
+        // Keep the stored tab name in sync
+        self.client
+            .set_window_option(session, window_index, "@muster_tab_name", new_name)?;
+
+        Ok(())
     }
 
     // --- Theme ---

@@ -168,6 +168,37 @@ impl ThemeValues {
             .collect::<Vec<_>>()
             .join(" ; ")
     }
+
+    /// Window-level options for unpinned (neutral) windows.
+    /// Includes a red beacon (●) to signal the window is ephemeral.
+    pub fn neutral_window_options() -> Vec<(String, String)> {
+        vec![
+            (
+                "window-status-format".into(),
+                "#[bg=#333333,fg=#999999]  #I: #W #[fg=#cc0000]● ".into(),
+            ),
+            (
+                "window-status-current-format".into(),
+                "#[fg=#999999,bg=#000000,bold]  #I: #W #[fg=#cc0000]● #[default]".into(),
+            ),
+            ("window-status-separator".into(), String::new()),
+        ]
+    }
+
+    /// Build hook command that applies neutral styling to new windows.
+    pub fn neutral_hook_command() -> String {
+        Self::neutral_window_options()
+            .iter()
+            .map(|(k, v)| {
+                if v.is_empty() {
+                    format!("set-window-option {k} ''")
+                } else {
+                    format!("set-window-option {k} '{v}'")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ; ")
+    }
 }
 
 /// Build the list of tmux commands for theming a session (for testing).
@@ -185,11 +216,43 @@ pub fn build_theme_commands(
     Ok(commands)
 }
 
+/// Apply colored (pinned) styling to a single window.
+pub fn apply_pinned_window_style(
+    client: &TmuxClient,
+    session: &str,
+    window_index: u32,
+    color: &str,
+    display_name: &str,
+) -> Result<()> {
+    let tv = ThemeValues::new(color, display_name)?;
+    for (key, value) in &tv.window_options() {
+        client.set_window_option(session, window_index, key, value)?;
+    }
+    client.set_window_option(session, window_index, "@muster_pinned", "1")?;
+    Ok(())
+}
+
+/// Apply neutral (unpinned) styling to a single window.
+pub fn apply_neutral_window_style(
+    client: &TmuxClient,
+    session: &str,
+    window_index: u32,
+) -> Result<()> {
+    for (key, value) in &ThemeValues::neutral_window_options() {
+        client.set_window_option(session, window_index, key, value)?;
+    }
+    // Best-effort removal — ignore errors if the options were never set
+    let _ = client.unset_window_option(session, window_index, "@muster_pinned");
+    let _ = client.unset_window_option(session, window_index, "@muster_tab_name");
+    Ok(())
+}
+
 /// Apply the color theme to a running tmux session.
 /// Accepts hex colors (`#f97316`) or named colors (`orange`).
 ///
 /// Sets session-level options directly and applies window-level options
-/// to each existing window, plus installs a hook for future windows.
+/// to each existing window (colored for pinned, neutral for unpinned),
+/// plus installs a hook that gives new windows neutral styling.
 pub fn apply_theme(
     client: &TmuxClient,
     session: &str,
@@ -205,22 +268,49 @@ pub fn apply_theme(
         client.cmd(&args)?;
     }
 
-    // Apply window-level options to each existing window
+    // Apply per-window styling: pinned windows get colored, unpinned get neutral
     let windows = client.list_windows(session)?;
     for win in &windows {
-        let target = format!("{session}:{}", win.index);
-        for (key, value) in &tv.window_options() {
-            client.cmd(&["set-window-option", "-t", &target, key, value])?;
+        let pinned = client
+            .get_window_option(session, win.index, "@muster_pinned")?
+            .is_some();
+        if pinned {
+            let target = format!("{session}:{}", win.index);
+            for (key, value) in &tv.window_options() {
+                client.cmd(&["set-window-option", "-t", &target, key, value])?;
+            }
+        } else {
+            let target = format!("{session}:{}", win.index);
+            for (key, value) in &ThemeValues::neutral_window_options() {
+                client.cmd(&["set-window-option", "-t", &target, key, value])?;
+            }
         }
     }
 
-    // Install hook so future windows also get the window options
+    // Hook gives new windows neutral styling (they're unpinned by default)
     client.cmd(&[
         "set-hook",
         "-t",
         session,
         "after-new-window",
-        &tv.hook_command(),
+        &ThemeValues::neutral_hook_command(),
+    ])?;
+
+    // Hook syncs window renames to the profile for pinned windows
+    let muster_bin = std::env::current_exe()
+        .unwrap_or_else(|_| "muster".into())
+        .display()
+        .to_string();
+    let rename_hook = format!(
+        "run-shell '{muster_bin} sync-rename \
+         #{{session_name}} #{{window_index}} \"#{{window_name}}\"'"
+    );
+    client.cmd(&[
+        "set-hook",
+        "-t",
+        session,
+        "after-rename-window",
+        &rename_hook,
     ])?;
 
     Ok(())

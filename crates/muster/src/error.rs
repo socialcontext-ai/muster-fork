@@ -29,6 +29,12 @@ pub enum Error {
 
     #[error("invalid color: {0}")]
     InvalidColor(String),
+
+    #[error("not inside a tmux session")]
+    NotInTmux,
+
+    #[error("not a muster-managed session")]
+    NotMusterSession,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -68,8 +68,14 @@ pub fn create_from_profile(
         Some(&profile.id),
     )?;
 
-    // Return session info
+    // Mark all profile-created windows as pinned (before apply_theme sees them)
     let windows = client.list_windows(&session_name)?;
+    for win in &windows {
+        client.set_window_option(&session_name, win.index, "@muster_pinned", "1")?;
+        client.set_window_option(&session_name, win.index, "@muster_tab_name", &win.name)?;
+    }
+
+    // Return session info
     Ok(SessionInfo {
         session_name,
         display_name: profile.name.clone(),

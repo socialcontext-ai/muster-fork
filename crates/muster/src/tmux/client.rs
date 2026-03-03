@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{Error, Result};
-use crate::tmux::types::{SessionInfo, TmuxSession, TmuxWindow};
+use crate::tmux::types::{PaneContext, SessionInfo, TmuxSession, TmuxWindow};
 
 /// Prefix for all muster-managed tmux sessions.
 pub const SESSION_PREFIX: &str = "muster_";
@@ -187,6 +187,74 @@ impl TmuxClient {
             "#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_active}",
         ])?;
         Ok(Self::parse_window_list(&output))
+    }
+
+    // ---- Pane context ----
+
+    /// Resolve context for a pane (session, window index, window name, cwd).
+    pub fn resolve_pane_context(&self, pane_id: &str) -> Result<PaneContext> {
+        let format = "#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}";
+        let output = self.cmd(&["display-message", "-p", "-t", pane_id, "-F", format])?;
+        let line = output.trim();
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 4 {
+            return Err(Error::TmuxError(format!(
+                "unexpected display-message output: {line}"
+            )));
+        }
+        Ok(PaneContext {
+            session_name: parts[0].to_string(),
+            window_index: parts[1].parse().unwrap_or(0),
+            window_name: parts[2].to_string(),
+            cwd: parts[3].to_string(),
+        })
+    }
+
+    // ---- Window option methods ----
+
+    /// Set a window-level option (works for built-in and `@user` options).
+    pub fn set_window_option(
+        &self,
+        session: &str,
+        window_index: u32,
+        key: &str,
+        value: &str,
+    ) -> Result<()> {
+        let target = format!("{session}:{window_index}");
+        self.cmd(&["set-window-option", "-t", &target, key, value])?;
+        Ok(())
+    }
+
+    /// Unset (remove) a window-level option.
+    pub fn unset_window_option(&self, session: &str, window_index: u32, key: &str) -> Result<()> {
+        let target = format!("{session}:{window_index}");
+        self.cmd(&["set-window-option", "-u", "-t", &target, key])?;
+        Ok(())
+    }
+
+    /// Get a window-level option. Returns None if the option is not set.
+    pub fn get_window_option(
+        &self,
+        session: &str,
+        window_index: u32,
+        key: &str,
+    ) -> Result<Option<String>> {
+        let target = format!("{session}:{window_index}");
+        let output = Command::new(&self.tmux_path)
+            .args(["show-window-option", "-t", &target, "-v", key])
+            .output()
+            .map_err(|e| Error::TmuxError(format!("failed to spawn tmux: {e}")))?;
+
+        if output.status.success() {
+            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if value.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     // ---- User option (metadata) methods ----

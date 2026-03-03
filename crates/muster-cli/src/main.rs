@@ -75,6 +75,23 @@ enum Command {
     /// Show all sessions with details
     Status,
 
+    /// Pin the current window to the session's profile
+    Pin,
+
+    /// Unpin the current window from the session's profile
+    Unpin,
+
+    /// Sync a window rename to the profile (called by tmux hook)
+    #[command(hide = true)]
+    SyncRename {
+        /// Session name
+        session: String,
+        /// Window index
+        window: u32,
+        /// New window name
+        name: String,
+    },
+
     /// Profile management
     Profile {
         #[command(subcommand)]
@@ -280,6 +297,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        }
+
+        Command::Pin => {
+            m.pin_window()?;
+            if !cli.json {
+                println!("Window pinned to profile.");
+            }
+        }
+
+        Command::Unpin => {
+            m.unpin_window()?;
+            if !cli.json {
+                println!("Window unpinned from profile.");
+            }
+        }
+
+        Command::SyncRename {
+            session,
+            window,
+            name,
+        } => {
+            m.sync_rename(&session, window, &name)?;
         }
 
         Command::Profile { action } => match action {

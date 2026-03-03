@@ -4,4 +4,4 @@ pub mod types;
 
 pub use client::TmuxClient;
 pub use control::{ControlMode, MusterEvent, StreamParser};
-pub use types::{SessionInfo, TmuxSession, TmuxWindow};
+pub use types::{PaneContext, SessionInfo, TmuxSession, TmuxWindow};

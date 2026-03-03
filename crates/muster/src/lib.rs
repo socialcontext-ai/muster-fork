@@ -15,5 +15,6 @@ pub use emulator::{Emulator, EmulatorHandle, GhosttyEmulator};
 pub use error::{Error, Result};
 pub use muster::Muster;
 pub use tmux::{
-    ControlMode, MusterEvent, SessionInfo, StreamParser, TmuxClient, TmuxSession, TmuxWindow,
+    ControlMode, MusterEvent, PaneContext, SessionInfo, StreamParser, TmuxClient, TmuxSession,
+    TmuxWindow,
 };

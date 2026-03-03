@@ -17,6 +17,15 @@ pub struct SessionInfo {
     pub attached: bool,
 }
 
+/// Context for the pane the CLI is running inside of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaneContext {
+    pub session_name: String,
+    pub window_index: u32,
+    pub window_name: String,
+    pub cwd: String,
+}
+
 /// A tmux window as returned by `list-windows`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TmuxWindow {
