@@ -187,8 +187,9 @@ fn color_dot(hex: &str) -> String {
 }
 
 fn default_config_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.config"))
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".config")
         .join("muster")
 }
 
