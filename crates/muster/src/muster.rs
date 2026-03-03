@@ -126,8 +126,13 @@ impl Muster {
             }
         }
 
+        // Resolve shell from settings → $SHELL
+        let settings = self.settings.load()?;
+        let shell = session::resolve_shell(settings.shell.as_deref());
+
         // Create from profile
-        let info = session::create_from_profile(&self.client, &profile)?;
+        let info =
+            session::create_from_profile(&self.client, &profile, shell.as_deref())?;
 
         // Apply theme
         session::theme::apply_theme(
@@ -153,7 +158,10 @@ impl Muster {
         cwd: &str,
         command: Option<&str>,
     ) -> Result<()> {
-        self.client.new_window(session, name, cwd)?;
+        let settings = self.settings.load()?;
+        let shell = session::resolve_shell(settings.shell.as_deref());
+        self.client
+            .new_window(session, name, cwd, shell.as_deref())?;
         if let Some(cmd) = command {
             let windows = self.client.list_windows(session)?;
             if let Some(last) = windows.last() {

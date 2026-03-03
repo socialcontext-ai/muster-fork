@@ -51,17 +51,21 @@ impl TmuxClient {
     }
 
     /// Create a new detached session.
-    pub fn new_session(&self, name: &str, first_window_name: &str, cwd: &str) -> Result<()> {
-        self.cmd(&[
-            "new-session",
-            "-d",
-            "-s",
-            name,
-            "-n",
-            first_window_name,
-            "-c",
-            cwd,
-        ])?;
+    ///
+    /// If `shell` is provided, it is used as the shell command for the initial window
+    /// (instead of tmux's `default-shell`).
+    pub fn new_session(
+        &self,
+        name: &str,
+        first_window_name: &str,
+        cwd: &str,
+        shell: Option<&str>,
+    ) -> Result<()> {
+        let mut args = vec!["new-session", "-d", "-s", name, "-n", first_window_name, "-c", cwd];
+        if let Some(sh) = shell {
+            args.push(sh);
+        }
+        self.cmd(&args)?;
         Ok(())
     }
 
@@ -72,8 +76,20 @@ impl TmuxClient {
     }
 
     /// Create a new window in a session.
-    pub fn new_window(&self, session: &str, name: &str, cwd: &str) -> Result<()> {
-        self.cmd(&["new-window", "-t", session, "-n", name, "-c", cwd])?;
+    ///
+    /// If `shell` is provided, it is used as the shell command for the window.
+    pub fn new_window(
+        &self,
+        session: &str,
+        name: &str,
+        cwd: &str,
+        shell: Option<&str>,
+    ) -> Result<()> {
+        let mut args = vec!["new-window", "-t", session, "-n", name, "-c", cwd];
+        if let Some(sh) = shell {
+            args.push(sh);
+        }
+        self.cmd(&args)?;
         Ok(())
     }
 
@@ -400,7 +416,7 @@ mod tests {
 
         // Create
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
         assert!(client.has_session(&session_name).unwrap());
 
@@ -421,10 +437,10 @@ mod tests {
         let unmanaged_name = format!("personal_test_{}", uuid::Uuid::new_v4());
 
         client
-            .new_session(&managed_name, "shell", "/tmp")
+            .new_session(&managed_name, "shell", "/tmp", None)
             .expect("create managed");
         client
-            .new_session(&unmanaged_name, "shell", "/tmp")
+            .new_session(&unmanaged_name, "shell", "/tmp", None)
             .expect("create unmanaged");
 
         let managed = client.list_managed_sessions().unwrap();
@@ -443,7 +459,7 @@ mod tests {
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
 
         client
-            .new_session(&session_name, "first", "/tmp")
+            .new_session(&session_name, "first", "/tmp", None)
             .expect("create session");
 
         let windows = client.list_windows(&session_name).unwrap();
@@ -460,7 +476,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
 
         client
@@ -486,7 +502,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
 
         client
@@ -510,7 +526,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
 
         client
@@ -536,11 +552,11 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "first", "/tmp")
+            .new_session(&session_name, "first", "/tmp", None)
             .expect("create session");
 
         client
-            .new_window(&session_name, "second", "/tmp")
+            .new_window(&session_name, "second", "/tmp", None)
             .expect("add window");
 
         let windows = client.list_windows(&session_name).unwrap();
@@ -556,10 +572,10 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "first", "/tmp")
+            .new_session(&session_name, "first", "/tmp", None)
             .expect("create session");
         client
-            .new_window(&session_name, "second", "/tmp")
+            .new_window(&session_name, "second", "/tmp", None)
             .expect("add window");
 
         // Close second window
@@ -578,10 +594,10 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "first", "/tmp")
+            .new_session(&session_name, "first", "/tmp", None)
             .expect("create session");
         client
-            .new_window(&session_name, "second", "/tmp")
+            .new_window(&session_name, "second", "/tmp", None)
             .expect("add window");
 
         // Switch back to first window
@@ -602,7 +618,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "original", "/tmp")
+            .new_session(&session_name, "original", "/tmp", None)
             .expect("create session");
 
         client

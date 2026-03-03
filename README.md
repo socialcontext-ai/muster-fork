@@ -177,9 +177,12 @@ These are parsed into `MusterEvent` variants and distributed via `tokio::broadca
 {
   "emulator": "ghostty",
   "emulator_path": null,
-  "tmux_path": null
+  "tmux_path": null,
+  "shell": "/usr/local/bin/fish"
 }
 ```
+
+`shell` overrides the default shell for new tmux panes. If omitted, muster uses `$SHELL`. Set this if your `$SHELL` differs from the shell you actually use (common on macOS where `$SHELL` defaults to `/bin/zsh`).
 
 ## Testing
 

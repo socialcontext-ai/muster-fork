@@ -13,6 +13,9 @@ pub struct Settings {
     pub emulator_path: Option<String>,
     #[serde(default)]
     pub tmux_path: Option<String>,
+    /// Shell to use for new tmux panes. Defaults to `$SHELL`.
+    #[serde(default)]
+    pub shell: Option<String>,
 }
 
 fn default_emulator() -> String {
@@ -25,6 +28,7 @@ impl Default for Settings {
             emulator: default_emulator(),
             emulator_path: None,
             tmux_path: None,
+            shell: None,
         }
     }
 }
@@ -91,6 +95,7 @@ mod tests {
             emulator: "alacritty".to_string(),
             emulator_path: Some("/usr/local/bin/alacritty".to_string()),
             tmux_path: Some("/opt/homebrew/bin/tmux".to_string()),
+            shell: None,
         };
 
         store.save(&settings).unwrap();

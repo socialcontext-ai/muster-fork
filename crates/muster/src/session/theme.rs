@@ -173,7 +173,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
 
         apply_theme(&client, &session_name, "#f97316", "Test").expect("apply theme");
@@ -193,7 +193,7 @@ mod tests {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
-            .new_session(&session_name, "shell", "/tmp")
+            .new_session(&session_name, "shell", "/tmp", None)
             .expect("create session");
 
         set_color(&client, &session_name, "#00ff00", "Test").expect("set color");
