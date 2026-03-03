@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/muster", "crates/muster-cli"]
+members = ["crates/muster", "crates/muster-cli", "crates/muster-notify"]
 resolver = "2"
 
 [workspace.package]
@@ -36,9 +36,6 @@ uuid = { version = "1", features = ["v4"] }
 
 # TOML
 toml = "0.8"
-
-# Desktop notifications
-notify-rust = "4"
 
 # Dev/test
 tempfile = "3"

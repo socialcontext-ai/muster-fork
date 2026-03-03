@@ -37,8 +37,11 @@ Consumers of this library:
 | Consumer | Role |
 |----------|------|
 | **CLI binary** (`muster` or subcommand) | Standalone terminal management from the shell |
+| **Notification helper** (`muster-notify`) | Minimal macOS binary inside a `.app` bundle for Notification Center delivery |
 | **Tauri application** | GUI integration — beacons, group launcher, settings |
 | **Tests** | Unit and integration tests against the library API |
+
+`muster-notify` is intentionally a separate crate from the CLI — it has a single dependency (`mac-notification-sys`) and no dependency on the muster library. It needs to be small and fast since tmux hooks invoke it on every session event.
 
 This separation means the terminal management system can be developed, tested, and used independently of the Tauri application.
 
@@ -93,7 +96,7 @@ There is no application-level cache of tmux state. There is no runtime state fil
 3. **Events flow up**: tmux control mode pushes events → library → GUI (via Tauri events)
 4. **No polling for state that tmux pushes**: window lifecycle, name changes, active window changes all come via control mode notifications
 5. **CWD tracking via subscription or on-demand query**: `%subscription-changed` may provide push-based CWD tracking (to be verified). Fallback is on-demand queries when the UI needs beacon data. Even in the worst case, polling is limited to a single lightweight query per session — fundamentally different from the previous architecture where polling was the entire state sync mechanism.
-6. **Control mode is the only push mechanism**: tmux hooks (`set-hook`) can trigger shell commands on events, but that requires building a custom IPC channel to receive those commands — effectively reinventing control mode with worse ergonomics. Control mode provides a structured, well-documented notification protocol directly over a persistent connection.
+6. **Control mode is the primary push mechanism**: tmux control mode provides a structured notification protocol for state synchronization (window lifecycle, session changes). tmux hooks (`set-hook`) are used selectively for fire-and-forget actions — specifically, `pane-died` and `alert-bell` hooks invoke CLI subcommands to deliver desktop notifications. Hooks are appropriate here because they trigger one-shot external commands rather than feeding a stateful event stream.
 
 ---
 
@@ -104,7 +107,12 @@ There is no application-level cache of tmux state. There is no runtime state fil
 ```
 ~/.config/muster/
 ├── profiles.json             # Saved terminal group profiles
-└── settings.json             # Global settings (tmux path, shell preference)
+├── settings.json             # Global settings (tmux path, shell preference)
+└── Muster.app/               # macOS notification helper (created by `muster setup-notifications`)
+    └── Contents/
+        ├── Info.plist         # CFBundleIdentifier: com.muster.notify
+        └── MacOS/
+            └── muster-notify  # Notification delivery binary
 ```
 
 That's it. No runtime state file. Running session metadata (name, color, profile reference) is stored as tmux user options on the session itself (see Section 4.6). When a session dies, its runtime metadata dies with it — the profile retains the original values.
@@ -772,6 +780,8 @@ The minimum viable library. Everything needed for session group lifecycle manage
 ### 14.2 Post-Core Features
 
 Each feature is self-contained and builds on the core without modifying it. Ordered roughly by value and implementation simplicity.
+
+**Desktop notifications** *(implemented)* — Session events (pane exits, terminal bell) trigger desktop notifications on macOS via Notification Center, falling back to tmux `display-message` over SSH or when the helper isn't installed. Implementation: tmux hooks (`pane-died`, `alert-bell`) invoke `muster _pane-died` / `muster _bell` subcommands, which delegate to a `muster-notify` helper binary inside a minimal `Muster.app` bundle at `~/.config/muster/Muster.app/`. The app bundle provides the `CFBundleIdentifier` that macOS requires for persistent notification permissions. CLI: `muster setup-notifications` creates the bundle.
 
 **Session snapshotting** — Capture a running session's current windows, CWDs, and layout into a profile. Implementation: query `list-windows` with format string to get window names, CWDs, and pane count, then serialize to a `Profile`. CLI: `muster profile save --from-session <name>`. Library: `save_profile_from_session(session: &str) -> Result<Profile, Error>`.
 

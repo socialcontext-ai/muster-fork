@@ -126,6 +126,10 @@ enum Command {
         #[command(subcommand)]
         action: ProfileAction,
     },
+
+    /// Install macOS notification app bundle
+    #[command(name = "setup-notifications")]
+    SetupNotifications,
 }
 
 #[derive(Subcommand)]
@@ -337,14 +341,27 @@ fn exec_tmux_attach(session: &str) -> ! {
     process::exit(1);
 }
 
-/// Send a notification via tmux display-message.
+/// Send a notification, preferring macOS desktop notifications when available.
 ///
-/// Desktop notifications (macOS Notification Center) require an app bundle
-/// with a registered CFBundleIdentifier — a bare CLI binary can't get
-/// persistent notification permissions. For now, use tmux display-message
-/// which always works. A Muster.app bundle will enable proper desktop
-/// notifications as a follow-up.
+/// On macOS (outside SSH), tries the Muster.app notification helper first —
+/// this has a CFBundleIdentifier so macOS Notification Center works properly.
+/// Falls back to tmux display-message if the helper isn't installed or fails.
 fn send_notification(summary: &str, body: &str) {
+    if cfg!(target_os = "macos") && std::env::var_os("SSH_CONNECTION").is_none() {
+        let app_binary = dirs::config_dir()
+            .unwrap_or_default()
+            .join("muster/Muster.app/Contents/MacOS/muster-notify");
+        if app_binary.exists() {
+            let status = std::process::Command::new(&app_binary)
+                .args([summary, body])
+                .status();
+            if status.is_ok_and(|s| s.success()) {
+                return;
+            }
+        }
+    }
+
+    // Fallback: tmux display-message
     let msg = if body.is_empty() {
         summary.to_string()
     } else {
@@ -353,6 +370,73 @@ fn send_notification(summary: &str, body: &str) {
     let _ = std::process::Command::new(tmux_path())
         .args(["display-message", "-d", "5000", &msg])
         .status();
+}
+
+/// Install the Muster.app notification helper bundle into ~/.config/muster/.
+///
+/// macOS requires a CFBundleIdentifier for persistent Notification Center access.
+/// This creates a minimal .app bundle containing the `muster-notify` binary.
+fn setup_notifications() -> Result<(), Box<dyn std::error::Error>> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Could not determine config directory")?
+        .join("muster");
+    let app_dir = config_dir.join("Muster.app/Contents");
+    let macos_dir = app_dir.join("MacOS");
+    std::fs::create_dir_all(&macos_dir)?;
+
+    // Write Info.plist
+    let plist = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.muster.notify</string>
+  <key>CFBundleName</key>
+  <string>Muster</string>
+  <key>CFBundleExecutable</key>
+  <string>muster-notify</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleVersion</key>
+  <string>1.0</string>
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
+"#;
+    std::fs::write(app_dir.join("Info.plist"), plist)?;
+
+    // Find muster-notify binary:
+    // 1. Next to the running muster binary (e.g. both in ~/.cargo/bin/)
+    // 2. On PATH
+    let notify_binary = std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            let sibling = exe.parent()?.join("muster-notify");
+            sibling.exists().then_some(sibling)
+        })
+        .or_else(|| which::which("muster-notify").ok());
+
+    let Some(source) = notify_binary else {
+        eprintln!("Could not find muster-notify binary.");
+        eprintln!("Install it: cargo install --path crates/muster-notify");
+        std::process::exit(1);
+    };
+
+    let dest = macos_dir.join("muster-notify");
+    std::fs::copy(&source, &dest)?;
+
+    // Make sure it's executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    println!("Notification app installed: {}", config_dir.join("Muster.app").display());
+    println!("macOS may prompt you to allow notifications from Muster.");
+
+    Ok(())
 }
 
 // ---- Process tree support for `muster ps` ----
@@ -992,6 +1076,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             name,
         } => {
             m.sync_rename(&session, window, &name)?;
+        }
+
+        Command::SetupNotifications => {
+            setup_notifications()?;
         }
 
         Command::Profile { action } => match action {

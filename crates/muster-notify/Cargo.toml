@@ -1,0 +1,16 @@
+[package]
+name = "muster-notify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Minimal macOS notification helper for Muster"
+
+[[bin]]
+name = "muster-notify"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+mac-notification-sys = "0.6"

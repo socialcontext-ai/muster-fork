@@ -11,6 +11,7 @@ Terminal session group management built on tmux. A Rust library and CLI for orga
 
 ```bash
 cargo install --path crates/muster-cli
+cargo install --path crates/muster-notify  # optional: macOS desktop notifications
 ```
 
 ## Quick Start
@@ -81,6 +82,7 @@ muster profile add-tab <profile> --name <name> --cwd <dir> [--command <cmd>]
 muster profile remove-tab <profile> <tab>     # By name or 0-based index
 muster profile list
 muster profile delete <name-or-id>
+muster setup-notifications                  # Install macOS desktop notification support
 ```
 
 The `--tab` flag uses colon-delimited format: `name:cwd` or `name:cwd:command`. It is repeatable for multiple tabs. If omitted, defaults to a single "Shell" tab at `$HOME`.
@@ -97,12 +99,13 @@ The `--tab` flag uses colon-delimited format: `name:cwd` or `name:cwd:command`. 
 
 ## Architecture
 
-Muster is organized as a Cargo workspace with two crates:
+Muster is organized as a Cargo workspace with three crates:
 
 ```
 crates/
 ├── muster/         # Library — tmux bindings, profiles, theming, control mode
-└── muster-cli/     # CLI binary
+├── muster-cli/     # CLI binary
+└── muster-notify/  # macOS notification helper (minimal binary for Muster.app bundle)
 ```
 
 ### Library Modules
@@ -198,6 +201,21 @@ These are parsed into `MusterEvent` variants and distributed via `tokio::broadca
 ```
 
 `shell` overrides the default shell for new tmux panes. If omitted, muster uses `$SHELL`. Set this if your `$SHELL` differs from the shell you actually use (common on macOS where `$SHELL` defaults to `/bin/zsh`). `tmux_path` overrides tmux discovery from `$PATH`.
+
+## Notifications
+
+Muster sends notifications on session events — pane exits and terminal bell alerts. By default these appear as tmux status bar messages.
+
+On macOS, you can enable native desktop notifications (Notification Center) by installing the notification helper:
+
+```bash
+cargo install --path crates/muster-notify
+muster setup-notifications
+```
+
+This creates a minimal `Muster.app` bundle at `~/.config/muster/Muster.app/` containing the `muster-notify` helper binary. The app bundle provides a `CFBundleIdentifier` (`com.muster.notify`) that macOS requires for persistent Notification Center access. macOS may prompt you to allow notifications from Muster on first use.
+
+When the helper is installed, notifications are delivered to Notification Center instead of the tmux status bar. Over SSH (`SSH_CONNECTION` is set), muster falls back to tmux display-message automatically.
 
 ## Testing
 
