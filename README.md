@@ -17,7 +17,13 @@ cargo install --path crates/muster-cli
 
 ```bash
 # Save a profile for a project
-muster profile save "PKM" --cwd ~/work/pkm --color '#f97316'
+muster profile save "PKM" --tab 'Shell:~/work/pkm' --color '#f97316'
+
+# Save a multi-tab profile
+muster profile save "Web App" --color orange \
+  --tab 'Shell:~/work/app' \
+  --tab 'Server:~/work/app:npm start' \
+  --tab 'Logs:~/var/log'
 
 # Launch it — creates the tmux session and drops you in
 muster launch "PKM"
@@ -30,20 +36,23 @@ muster status
 muster launch "PKM"
 
 # Or attach by session name directly
-muster attach muster_profile_abc123
+muster attach muster_pkm
 
-# Create a quick throwaway session
-muster new "Scratch" --cwd /tmp
+# Create a quick throwaway session (defaults to a Shell tab at $HOME)
+muster new "Scratch"
 # Again, you're immediately inside it.
 
 # Create without attaching (background)
 muster launch "PKM" --detach
-muster new "Background" --cwd /tmp --detach
+muster new "Background" --detach
+
+# Add a tab to an existing profile
+muster profile add-tab "PKM" --name Editor --cwd ~/work/pkm
 ```
 
 ### Typical Workflow
 
-1. **`muster profile save`** — define a project (name, directory, color)
+1. **`muster profile save`** — define a project (name, tabs, color)
 2. **`muster launch <name>`** — start or reattach (execs `tmux attach`, replacing your shell)
 3. Work inside tmux. Use `Ctrl-b d` to detach back to your regular shell.
 4. **`muster launch <name>`** again to reattach later
@@ -57,15 +66,20 @@ muster new "Background" --cwd /tmp --detach
 ```
 muster launch <profile-name-or-id> [--detach]  # Create/attach to a session (default: attaches)
 muster attach <session-name> [--window N]      # Attach to a running session
-muster new <name> [--cwd dir] [--color hex] [--detach]  # Create ad-hoc session
+muster new <name> [--tab 'name:cwd[:cmd]' ...] [--color hex] [--detach]
 muster kill <session-name>                     # Destroy a session
 muster list                                    # List profiles and running sessions
 muster status                                  # Show sessions with window details
 muster color <session> <hex-color>             # Change session color live
-muster profile save <name> [--cwd dir] [--color hex]
+muster pin                                     # Pin current tmux window to session profile
+muster unpin                                   # Unpin current tmux window from profile
+muster profile save <name> [--tab 'name:cwd[:cmd]' ...] [--color hex]
+muster profile add-tab <profile> --name <name> --cwd <dir> [--command <cmd>]
 muster profile list
 muster profile delete <name-or-id>
 ```
+
+The `--tab` flag uses colon-delimited format: `name:cwd` or `name:cwd:command`. It is repeatable for multiple tabs. If omitted, defaults to a single "Shell" tab at `$HOME`.
 
 `launch`, `attach`, and `new` replace the current process with `tmux attach` (via exec). Use `--detach` to create without attaching. `--json` is available on all commands for machine-readable output. `--config-dir` or `MUSTER_CONFIG_DIR` overrides the default config directory (`~/.config/muster/`).
 
@@ -111,7 +125,7 @@ let m = Muster::init(Path::new("~/.config/muster"))?;
 
 // Create a profile
 let profile = Profile {
-    id: "profile_myproject".into(),
+    id: "my-project".into(),
     name: "My Project".into(),
     color: "#f97316".into(),
     tabs: vec![
@@ -158,8 +172,8 @@ These are parsed into `MusterEvent` variants and distributed via `tokio::broadca
 ```json
 {
   "profiles": {
-    "profile_abc123": {
-      "id": "profile_abc123",
+    "pkm-project": {
+      "id": "pkm-project",
       "name": "PKM Project",
       "color": "#f97316",
       "tabs": [

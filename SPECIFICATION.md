@@ -124,8 +124,8 @@ A profile is a template for creating a terminal group. It does not represent a r
 ```json
 {
   "profiles": {
-    "profile_<id>": {
-      "id": "profile_<id>",
+    "pkm-project": {
+      "id": "pkm-project",
       "name": "PKM Project",
       "color": "#f97316",
       "tabs": [
@@ -153,18 +153,18 @@ Running session metadata is stored as **tmux user options** on the session itsel
 |-----------------|-------|---------|
 | `@muster_name` | Display name | `"PKM Project"` |
 | `@muster_color` | Hex color | `"#f97316"` |
-| `@muster_profile` | Profile ID (if launched from profile) | `"profile_abc123"` |
+| `@muster_profile` | Profile ID (if launched from profile) | `"pkm-project"` |
 
 Set on session creation:
 ```bash
-tmux set-option -t muster_abc123 @muster_name "PKM Project"
-tmux set-option -t muster_abc123 @muster_color "#f97316"
-tmux set-option -t muster_abc123 @muster_profile "profile_abc123"
+tmux set-option -t muster_pkm-project @muster_name "PKM Project"
+tmux set-option -t muster_pkm-project @muster_color "#f97316"
+tmux set-option -t muster_pkm-project @muster_profile "pkm-project"
 ```
 
 Queried at any time:
 ```bash
-tmux show-option -t muster_abc123 -v @muster_color
+tmux show-option -t muster_pkm-project -v @muster_color
 # or via format strings:
 tmux list-sessions -F '#{session_name} #{@muster_name} #{@muster_color}'
 ```
@@ -198,9 +198,9 @@ For long-running library consumers (the GUI app), control mode connections estab
 
 ### 4.1 Session Naming Convention
 
-All managed sessions use the prefix `muster_` followed by the profile ID:
+All managed sessions use the prefix `muster_` followed by the profile ID (a slugified name):
 ```
-muster_profile_abc123
+muster_pkm-project
 ```
 
 This allows the library to distinguish managed sessions from the user's personal tmux sessions.
@@ -284,9 +284,9 @@ tmux control mode defines the following notifications. The library consumes the 
 ### 4.5 Session Lifecycle
 
 **Creating a group from a profile:**
-1. `tmux new-session -d -s muster_<profile_id> -n <tab_0_name> -c <tab_0_cwd>`
-2. For each additional tab: `tmux new-window -t muster_<profile_id> -n <name> -c <cwd>`
-3. For tabs with startup commands: `tmux send-keys -t muster_<profile_id>:<index> '<command>' Enter`
+1. `tmux new-session -d -s muster_<slug> -n <tab_0_name> -c <tab_0_cwd>`
+2. For each additional tab: `tmux new-window -t muster_<slug> -n <name> -c <cwd>`
+3. For tabs with startup commands: `tmux send-keys -t muster_<slug>:<index> '<command>' Enter`
 4. Set user options: `@muster_name`, `@muster_color`, `@muster_profile` (see Section 3.3)
 5. Apply color theme (Section 6)
 6. Open control mode connection
@@ -660,14 +660,16 @@ The library is testable at multiple levels:
 muster list                              # List profiles and running sessions
 muster launch <profile-name-or-id>       # Launch or attach to a profile's session
 muster attach <session-name>             # Attach to a running session
-muster new <name> [--cwd <dir>] [--color <hex>]  # Create ad-hoc group
+muster new <name> [--tab 'name:cwd[:cmd]' ...] [--color <hex>] [--detach]
 muster kill <session-name>               # Destroy a session
-muster add-tab <session> [--cwd <dir>] [--name <name>] [--command <cmd>]
-muster profile save <name> [--from-session <name>]  # Save current session as profile
-muster profile list
-muster profile delete <name-or-id>
 muster color <session> <hex-color>       # Change session color live
 muster status                            # Show all sessions with window counts, CWDs
+muster pin                               # Pin current tmux window to session profile
+muster unpin                             # Unpin current tmux window from profile
+muster profile save <name> [--tab 'name:cwd[:cmd]' ...] [--color <hex>]
+muster profile add-tab <profile> --name <name> --cwd <dir> [--command <cmd>]
+muster profile list
+muster profile delete <name-or-id>
 ```
 
 ### 11.2 Behavior
