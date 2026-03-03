@@ -182,6 +182,12 @@ impl TmuxClient {
 
     // ---- User option (metadata) methods ----
 
+    /// Set a tmux session environment variable.
+    pub fn set_environment(&self, session: &str, name: &str, value: &str) -> Result<()> {
+        self.cmd(&["set-environment", "-t", session, name, value])?;
+        Ok(())
+    }
+
     /// Set a tmux user option on a session.
     pub fn set_option(&self, session: &str, key: &str, value: &str) -> Result<()> {
         self.cmd(&["set-option", "-t", session, key, value])?;

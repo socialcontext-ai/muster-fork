@@ -41,9 +41,10 @@ pub fn create_from_profile(
     // Create the session with the first window
     client.new_session(&session_name, &first_tab.name, &first_tab.cwd, shell)?;
 
-    // Set default-command so any windows the user creates manually also use the right shell
+    // Set default-command and SHELL env var so the session uses the right shell throughout
     if let Some(sh) = shell {
         client.set_option(&session_name, "default-command", sh)?;
+        client.set_environment(&session_name, "SHELL", sh)?;
     }
 
     // Send startup command for first tab if specified
