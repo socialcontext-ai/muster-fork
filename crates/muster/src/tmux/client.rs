@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{Error, Result};
-use crate::tmux::types::{PaneContext, SessionInfo, TmuxSession, TmuxWindow};
+use crate::tmux::types::{PaneContext, SessionInfo, TmuxPane, TmuxSession, TmuxWindow};
 
 /// Prefix for all muster-managed tmux sessions.
 pub const SESSION_PREFIX: &str = "muster_";
@@ -175,6 +175,19 @@ impl TmuxClient {
                 })
             })
             .collect()
+    }
+
+    /// List all panes across all windows in a session.
+    pub fn list_panes(&self, session: &str) -> Result<Vec<TmuxPane>> {
+        let output = self.cmd(&[
+            "list-panes",
+            "-s",
+            "-t",
+            session,
+            "-F",
+            "#{window_index}\t#{pane_index}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}",
+        ])?;
+        Ok(Self::parse_pane_list(&output))
     }
 
     /// List windows for a session.
@@ -360,6 +373,27 @@ impl TmuxClient {
             .collect()
     }
 
+    /// Parse `list-panes -s -F` output into structured data.
+    pub fn parse_pane_list(output: &str) -> Vec<TmuxPane> {
+        output
+            .lines()
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() < 5 {
+                    return None;
+                }
+                Some(TmuxPane {
+                    window_index: parts[0].parse().unwrap_or(0),
+                    index: parts[1].parse().unwrap_or(0),
+                    pid: parts[2].parse().unwrap_or(0),
+                    command: parts[3].to_string(),
+                    cwd: parts[4].to_string(),
+                })
+            })
+            .collect()
+    }
+
     /// Parse `list-windows -F` output into structured data.
     pub fn parse_window_list(output: &str) -> Vec<TmuxWindow> {
         output
@@ -439,6 +473,31 @@ mod tests {
     fn test_parse_window_list_empty() {
         let windows = TmuxClient::parse_window_list("");
         assert!(windows.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pane_list() {
+        let output = "0\t0\t12345\tfish\t/Users/sbb/work\n1\t0\t12400\tbash\t/tmp\n1\t1\t12410\tvim\t/tmp\n";
+        let panes = TmuxClient::parse_pane_list(output);
+
+        assert_eq!(panes.len(), 3);
+        assert_eq!(panes[0].window_index, 0);
+        assert_eq!(panes[0].index, 0);
+        assert_eq!(panes[0].pid, 12345);
+        assert_eq!(panes[0].command, "fish");
+        assert_eq!(panes[0].cwd, "/Users/sbb/work");
+        assert_eq!(panes[1].window_index, 1);
+        assert_eq!(panes[1].pid, 12400);
+        assert_eq!(panes[2].window_index, 1);
+        assert_eq!(panes[2].index, 1);
+        assert_eq!(panes[2].pid, 12410);
+        assert_eq!(panes[2].command, "vim");
+    }
+
+    #[test]
+    fn test_parse_pane_list_empty() {
+        let panes = TmuxClient::parse_pane_list("");
+        assert!(panes.is_empty());
     }
 
     #[test]

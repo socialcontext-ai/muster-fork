@@ -73,6 +73,12 @@ enum Command {
         color: String,
     },
 
+    /// Show processes running inside sessions
+    Ps {
+        /// Profile name or ID (shows all sessions if omitted)
+        profile: Option<String>,
+    },
+
     /// Show all sessions with details
     Status,
 
@@ -309,6 +315,76 @@ fn exec_tmux_attach(session: &str) -> ! {
     process::exit(1);
 }
 
+// ---- Process tree support for `muster ps` ----
+
+struct ProcessInfo {
+    pid: u32,
+    ppid: u32,
+    command: String,
+}
+
+#[derive(serde::Serialize)]
+struct ProcessTree {
+    pid: u32,
+    command: String,
+    children: Vec<ProcessTree>,
+}
+
+/// Run `ps -eo pid,ppid,comm` and parse the full process table.
+fn build_process_table() -> Vec<ProcessInfo> {
+    let output = match std::process::Command::new("ps")
+        .args(["-eo", "pid,ppid,comm"])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => return Vec::new(),
+    };
+
+    output
+        .lines()
+        .skip(1) // skip header
+        .filter_map(|line| {
+            let line = line.trim();
+            let mut parts = line.splitn(3, char::is_whitespace);
+            let pid: u32 = parts.next()?.trim().parse().ok()?;
+            let parent: u32 = parts.next()?.trim().parse().ok()?;
+            let command = parts.next()?.trim().to_string();
+            Some(ProcessInfo { pid, ppid: parent, command })
+        })
+        .collect()
+}
+
+/// Build a process tree rooted at `root_pid` from the system process table.
+fn build_tree(root_pid: u32, table: &[ProcessInfo]) -> Vec<ProcessTree> {
+    let children: Vec<&ProcessInfo> = table.iter().filter(|p| p.ppid == root_pid).collect();
+    children
+        .into_iter()
+        .map(|child| ProcessTree {
+            pid: child.pid,
+            command: child.command.clone(),
+            children: build_tree(child.pid, table),
+        })
+        .collect()
+}
+
+/// Render a process tree with box-drawing characters at a given indent level.
+fn render_tree(tree: &[ProcessTree], prefix: &str) {
+    for (i, node) in tree.iter().enumerate() {
+        let is_last = i == tree.len() - 1;
+        let connector = if is_last { "└─" } else { "├─" };
+        println!(
+            "{prefix}{connector} {} (PID {})",
+            node.command, node.pid
+        );
+        let child_prefix = if is_last {
+            format!("{prefix}   ")
+        } else {
+            format!("{prefix}│  ")
+        };
+        render_tree(&node.children, &child_prefix);
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -450,6 +526,114 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     m.update_profile(profile)?;
                     if !cli.json {
                         println!("Color updated: {} → {color}", p.name);
+                    }
+                }
+            }
+        }
+
+        Command::Ps { profile } => {
+            let mut sessions = m.list_sessions()?;
+
+            // Filter to matching profile if specified
+            if let Some(ref filter) = profile {
+                sessions.retain(|s| {
+                    s.display_name == *filter
+                        || s.profile_id.as_deref() == Some(filter)
+                        || s.session_name == *filter
+                });
+                if sessions.is_empty() {
+                    eprintln!("No session found for: {filter}");
+                    process::exit(1);
+                }
+            }
+
+            if sessions.is_empty() {
+                if cli.json {
+                    println!("[]");
+                } else {
+                    println!("No active sessions.");
+                }
+            } else {
+                let proc_table = build_process_table();
+
+                if cli.json {
+                    let mut json_sessions = Vec::new();
+                    for s in &sessions {
+                        let panes = m.client().list_panes(&s.session_name).unwrap_or_default();
+                        // Group panes by window
+                        let mut window_map: std::collections::BTreeMap<u32, Vec<&muster::TmuxPane>> =
+                            std::collections::BTreeMap::new();
+                        for pane in &panes {
+                            window_map.entry(pane.window_index).or_default().push(pane);
+                        }
+                        let windows = m.client().list_windows(&s.session_name).unwrap_or_default();
+                        let json_windows: Vec<serde_json::Value> = windows
+                            .iter()
+                            .map(|w| {
+                                let w_panes = window_map.get(&w.index).cloned().unwrap_or_default();
+                                let json_panes: Vec<serde_json::Value> = w_panes
+                                    .iter()
+                                    .map(|p| {
+                                        let children = build_tree(p.pid, &proc_table);
+                                        serde_json::json!({
+                                            "index": p.index,
+                                            "pid": p.pid,
+                                            "command": p.command,
+                                            "cwd": p.cwd,
+                                            "children": children,
+                                        })
+                                    })
+                                    .collect();
+                                serde_json::json!({
+                                    "index": w.index,
+                                    "name": w.name,
+                                    "cwd": w.cwd,
+                                    "panes": json_panes,
+                                })
+                            })
+                            .collect();
+
+                        json_sessions.push(serde_json::json!({
+                            "session": s.session_name,
+                            "display_name": s.display_name,
+                            "color": s.color,
+                            "windows": json_windows,
+                        }));
+                    }
+                    println!("{}", serde_json::to_string_pretty(&json_sessions)?);
+                } else {
+                    for s in &sessions {
+                        let panes = m.client().list_panes(&s.session_name).unwrap_or_default();
+                        let windows = m.client().list_windows(&s.session_name).unwrap_or_default();
+
+                        println!(
+                            "{} {} ({}) [{} windows]",
+                            color_dot(&s.color),
+                            s.display_name,
+                            s.session_name,
+                            s.window_count,
+                        );
+
+                        // Group panes by window index
+                        let mut pane_map: std::collections::BTreeMap<u32, Vec<&muster::TmuxPane>> =
+                            std::collections::BTreeMap::new();
+                        for pane in &panes {
+                            pane_map.entry(pane.window_index).or_default().push(pane);
+                        }
+
+                        for w in &windows {
+                            println!("  [{}] {} {}", w.index, w.name, w.cwd);
+                            if let Some(w_panes) = pane_map.get(&w.index) {
+                                for pane in w_panes {
+                                    println!(
+                                        "      {} (PID {})",
+                                        pane.command, pane.pid
+                                    );
+                                    let children = build_tree(pane.pid, &proc_table);
+                                    render_tree(&children, "        ");
+                                }
+                            }
+                        }
                     }
                 }
             }

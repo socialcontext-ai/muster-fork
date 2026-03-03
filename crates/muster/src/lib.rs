@@ -13,6 +13,6 @@ pub use config::{Profile, ProfileStore, Settings, SettingsStore, TabProfile};
 pub use error::{Error, Result};
 pub use muster::Muster;
 pub use tmux::{
-    ControlMode, MusterEvent, PaneContext, SessionInfo, StreamParser, TmuxClient, TmuxSession,
-    TmuxWindow,
+    ControlMode, MusterEvent, PaneContext, SessionInfo, StreamParser, TmuxClient, TmuxPane,
+    TmuxSession, TmuxWindow,
 };

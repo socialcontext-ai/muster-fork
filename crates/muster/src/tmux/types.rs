@@ -34,3 +34,13 @@ pub struct TmuxWindow {
     pub cwd: String,
     pub active: bool,
 }
+
+/// A tmux pane with its PID and current state.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct TmuxPane {
+    pub window_index: u32,
+    pub index: u32,
+    pub pid: u32,
+    pub command: String,
+    pub cwd: String,
+}
