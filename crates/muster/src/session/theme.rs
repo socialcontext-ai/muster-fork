@@ -148,10 +148,7 @@ impl ThemeValues {
             ),
             (
                 "window-status-current-format".into(),
-                format!(
-                    "#[fg={},bg=#000000,bold]  #I: #W  #[default]",
-                    self.color
-                ),
+                format!("#[fg={},bg=#000000,bold]  #I: #W  #[default]", self.color),
             ),
             ("window-status-separator".into(), String::new()),
         ]
@@ -183,13 +180,7 @@ pub fn build_theme_commands(
     let mut commands = tv.session_commands(session);
     // Include window options as set-option for backward compat in tests
     for (k, v) in tv.window_options() {
-        commands.push(vec![
-            "set-option".into(),
-            "-t".into(),
-            session.into(),
-            k,
-            v,
-        ]);
+        commands.push(vec!["set-option".into(), "-t".into(), session.into(), k, v]);
     }
     Ok(commands)
 }

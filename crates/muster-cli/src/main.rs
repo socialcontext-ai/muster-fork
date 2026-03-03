@@ -36,7 +36,7 @@ enum Command {
 
     /// Attach to a running session
     Attach {
-        /// Session name
+        /// Profile name, ID, or session name
         session: String,
         /// Window index to switch to
         #[arg(long)]
@@ -45,7 +45,7 @@ enum Command {
 
     /// Destroy a session
     Kill {
-        /// Session name
+        /// Profile name, ID, or session name
         session: String,
     },
 
@@ -66,7 +66,7 @@ enum Command {
 
     /// Change session color live
     Color {
-        /// Session name
+        /// Profile name, ID, or session name
         session: String,
         /// Hex color (e.g. #f97316)
         color: String,
@@ -199,24 +199,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Attach { session, window } => {
-            // Verify session exists
-            let sessions = m.list_sessions()?;
-            let found = sessions
-                .iter()
-                .find(|s| s.session_name == session || s.display_name == session);
-
-            let session_name = match found {
-                Some(s) => s.session_name.clone(),
-                None => {
-                    // Try as a literal tmux session name
-                    if m.client().has_session(&session)? {
-                        session.clone()
-                    } else {
-                        eprintln!("Session not found: {session}");
-                        process::exit(1);
-                    }
-                }
-            };
+            let session_name = m.resolve_session(&session)?;
 
             if let Some(idx) = window {
                 m.switch_window(&session_name, idx)?;
@@ -226,6 +209,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Kill { session } => {
+            let session = m.resolve_session(&session)?;
             m.destroy(&session)?;
             if !cli.json {
                 println!("Destroyed: {session}");
@@ -246,7 +230,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let color = muster::session::theme::resolve_color(&color)?;
 
             let profile = muster::Profile {
-                id: format!("adhoc_{}", uuid::Uuid::new_v4()),
+                id: muster::config::profile::slugify(&name),
                 name: name.clone(),
                 color,
                 tabs: vec![muster::TabProfile {
@@ -269,6 +253,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Color { session, color } => {
+            let session = m.resolve_session(&session)?;
             m.set_color(&session, &color)?;
             if !cli.json {
                 println!("Color updated: {session} → {color}");
@@ -342,7 +327,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let color = muster::session::theme::resolve_color(&color)?;
 
                 let profile = muster::Profile {
-                    id: format!("profile_{}", uuid::Uuid::new_v4()),
+                    id: muster::config::profile::slugify(&name),
                     name: name.clone(),
                     color,
                     tabs: vec![muster::TabProfile {

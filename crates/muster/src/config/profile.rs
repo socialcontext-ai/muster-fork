@@ -6,6 +6,44 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
+/// Convert a display name into a URL-safe slug for use as a profile ID.
+///
+/// Lowercase, spaces/underscores become hyphens, non-alphanumeric chars stripped,
+/// consecutive hyphens collapsed, leading/trailing hyphens trimmed.
+pub fn slugify(name: &str) -> String {
+    let s: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_whitespace() || c == '_' {
+                '-'
+            } else {
+                c
+            }
+        })
+        .filter(|c| c.is_alphanumeric() || *c == '-')
+        .collect();
+    // Collapse consecutive hyphens and trim leading/trailing
+    let mut result = String::with_capacity(s.len());
+    let mut prev_hyphen = true; // treat start as "previous hyphen" to trim leading
+    for c in s.chars() {
+        if c == '-' {
+            if !prev_hyphen {
+                result.push('-');
+            }
+            prev_hyphen = true;
+        } else {
+            result.push(c);
+            prev_hyphen = false;
+        }
+    }
+    // Trim trailing hyphen
+    if result.ends_with('-') {
+        result.pop();
+    }
+    result
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Profile {
     pub id: String,
@@ -64,6 +102,9 @@ impl ProfileStore {
 
     pub fn create(&self, profile: Profile) -> Result<Profile> {
         let mut file = self.load()?;
+        if file.profiles.contains_key(&profile.id) {
+            return Err(Error::DuplicateProfile(profile.id));
+        }
         file.profiles.insert(profile.id.clone(), profile.clone());
         self.save(&file)?;
         Ok(profile)
@@ -120,15 +161,57 @@ mod tests {
     }
 
     #[test]
+    fn test_slugify_basic() {
+        assert_eq!(slugify("My Project"), "my-project");
+        assert_eq!(slugify("Work"), "work");
+        assert_eq!(slugify("hello world"), "hello-world");
+    }
+
+    #[test]
+    fn test_slugify_special_chars() {
+        assert_eq!(slugify("Project @#$ Name!"), "project-name");
+        assert_eq!(slugify("foo_bar_baz"), "foo-bar-baz");
+        assert_eq!(slugify("a---b"), "a-b");
+        assert_eq!(slugify("  leading trailing  "), "leading-trailing");
+    }
+
+    #[test]
+    fn test_slugify_case() {
+        assert_eq!(slugify("UPPER CASE"), "upper-case");
+        assert_eq!(slugify("MiXeD CaSe"), "mixed-case");
+    }
+
+    #[test]
+    fn test_slugify_empty_and_edge() {
+        assert_eq!(slugify(""), "");
+        assert_eq!(slugify("---"), "");
+        assert_eq!(slugify("a"), "a");
+    }
+
+    #[test]
     fn test_create_profile() {
         let dir = TempDir::new().unwrap();
         let store = ProfileStore::new(dir.path()).unwrap();
-        let profile = test_profile("profile_1", "Test Project");
+        let profile = test_profile("test-project", "Test Project");
 
         let created = store.create(profile.clone()).unwrap();
-        assert_eq!(created.id, "profile_1");
+        assert_eq!(created.id, "test-project");
         assert_eq!(created.name, "Test Project");
         assert_eq!(created.tabs.len(), 1);
+    }
+
+    #[test]
+    fn test_create_duplicate_profile() {
+        let dir = TempDir::new().unwrap();
+        let store = ProfileStore::new(dir.path()).unwrap();
+        store
+            .create(test_profile("my-project", "My Project"))
+            .unwrap();
+
+        let result = store.create(test_profile("my-project", "My Project"));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("duplicate profile"));
     }
 
     #[test]

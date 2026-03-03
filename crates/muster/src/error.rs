@@ -18,6 +18,9 @@ pub enum Error {
     #[error("profile not found: {0}")]
     ProfileNotFound(String),
 
+    #[error("duplicate profile: {0}")]
+    DuplicateProfile(String),
+
     #[error("session not found: {0}")]
     SessionNotFound(String),
 

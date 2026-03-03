@@ -144,6 +144,21 @@ impl Muster {
         Ok(info)
     }
 
+    /// Resolve a user-provided identifier to a tmux session name.
+    ///
+    /// Tries `muster_{input}` first (the common case for profile-based sessions),
+    /// then the literal input as a fallback.
+    pub fn resolve_session(&self, input: &str) -> Result<String> {
+        let prefixed = format!("muster_{input}");
+        if self.client.has_session(&prefixed)? {
+            return Ok(prefixed);
+        }
+        if self.client.has_session(input)? {
+            return Ok(input.to_string());
+        }
+        Err(Error::SessionNotFound(input.to_string()))
+    }
+
     pub fn destroy(&self, session_name: &str) -> Result<()> {
         session::destroy(&self.client, session_name)
     }
@@ -190,7 +205,19 @@ impl Muster {
             .client
             .get_option(session, "@muster_name")?
             .unwrap_or_else(|| session.to_string());
-        session::theme::set_color(&self.client, session, color, &display_name)
+
+        // set_color resolves named colors internally
+        session::theme::set_color(&self.client, session, color, &display_name)?;
+
+        // Persist to profile if this is a muster-managed session
+        if let Some(profile_id) = session.strip_prefix("muster_") {
+            if let Some(mut profile) = self.profiles.get(profile_id)? {
+                profile.color = session::theme::resolve_color(color)?;
+                self.profiles.update(profile)?;
+            }
+        }
+
+        Ok(())
     }
 
     // --- Emulator ---
