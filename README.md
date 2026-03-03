@@ -74,7 +74,11 @@ muster color <session> <hex-color>             # Change session color live
 muster pin                                     # Pin current tmux window to session profile
 muster unpin                                   # Unpin current tmux window from profile
 muster profile save <name> [--tab 'name:cwd[:cmd]' ...] [--color hex]
+muster profile show <name-or-id>
+muster profile edit <name-or-id>              # Open in $EDITOR as TOML
+muster profile update <name-or-id> [--name ...] [--color ...]
 muster profile add-tab <profile> --name <name> --cwd <dir> [--command <cmd>]
+muster profile remove-tab <profile> <tab>     # By name or 0-based index
 muster profile list
 muster profile delete <name-or-id>
 ```
