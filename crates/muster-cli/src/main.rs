@@ -692,10 +692,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         m.update_profile(profile)?
                     } else {
                         // Check for active session on old ID
-                        let session_name = format!("muster_{old_id}");
                         if m.resolve_session(&old_id).is_ok() {
                             eprintln!(
-                                "Cannot rename: session `{session_name}` is running. Kill it first."
+                                "Cannot rename: session for \"{}\" is running. Kill it first.",
+                                p.name
                             );
                             process::exit(1);
                         }
@@ -729,10 +729,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     let new_id = muster::config::profile::slugify(new_name);
                     if new_id != old_id {
                         // Check for active session on old ID
-                        let session_name = format!("muster_{old_id}");
                         if m.resolve_session(&old_id).is_ok() {
                             eprintln!(
-                                "Kill session `{session_name}` before renaming."
+                                "Kill session for \"{}\" before renaming.",
+                                p.name
                             );
                             process::exit(1);
                         }
