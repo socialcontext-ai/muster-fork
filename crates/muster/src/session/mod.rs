@@ -75,6 +75,9 @@ pub fn create_from_profile(
         client.set_window_option(&session_name, win.index, "@muster_tab_name", &win.name)?;
     }
 
+    // Set up notification hooks (pane-died, alert-bell)
+    setup_hooks(client, &session_name)?;
+
     // Return session info
     Ok(SessionInfo {
         session_name,
@@ -94,6 +97,29 @@ pub fn destroy(client: &TmuxClient, session_name: &str) -> Result<()> {
 /// Get windows for a session.
 pub fn get_windows(client: &TmuxClient, session_name: &str) -> Result<Vec<TmuxWindow>> {
     client.list_windows(session_name)
+}
+
+/// Set up tmux hooks for session notifications.
+///
+/// Installs `pane-died` and `alert-bell` hooks that invoke one-shot `muster`
+/// subcommands to deliver desktop notifications. Also sets `remain-on-exit on`
+/// so the `pane-died` hook fires before the pane is destroyed.
+fn setup_hooks(client: &TmuxClient, session_name: &str) -> Result<()> {
+    client.cmd(&["set-option", "-t", session_name, "remain-on-exit", "on"])?;
+
+    let pane_died_hook = concat!(
+        "run-shell -b \"muster _pane-died",
+        " #{session_name} '#{window_name}' #{pane_id} #{pane_dead_status}\""
+    );
+    client.cmd(&["set-hook", "-t", session_name, "pane-died", pane_died_hook])?;
+
+    let bell_hook = concat!(
+        "run-shell -b \"muster _bell",
+        " #{session_name} '#{window_name}'\""
+    );
+    client.cmd(&["set-hook", "-t", session_name, "alert-bell", bell_hook])?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -189,5 +215,116 @@ mod tests {
         assert!(client.has_session(&session_name).unwrap());
 
         client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_create_session_sets_remain_on_exit() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let profile = test_profile();
+        let session_name = format!("{SESSION_PREFIX}{}", profile.id);
+
+        create_from_profile(&client, &profile, None).expect("create session");
+
+        let output = client
+            .cmd(&["show-option", "-t", &session_name, "-v", "remain-on-exit"])
+            .unwrap();
+        assert_eq!(output.trim(), "on");
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_create_session_sets_alert_bell_hook() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let profile = test_profile();
+        let session_name = format!("{SESSION_PREFIX}{}", profile.id);
+
+        create_from_profile(&client, &profile, None).expect("create session");
+
+        // alert-bell is a session-level hook
+        let hooks = client
+            .cmd(&["show-hooks", "-t", &session_name])
+            .unwrap();
+        assert!(
+            hooks.contains("alert-bell"),
+            "alert-bell hook not found in: {hooks}"
+        );
+        assert!(
+            hooks.contains("muster _bell"),
+            "hook should invoke muster _bell: {hooks}"
+        );
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_create_session_sets_pane_died_hook() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let profile = test_profile();
+        let session_name = format!("{SESSION_PREFIX}{}", profile.id);
+
+        create_from_profile(&client, &profile, None).expect("create session");
+
+        // pane-died is a window-level hook — use show-hooks -w
+        let hooks = client
+            .cmd(&["show-hooks", "-w", "-t", &session_name])
+            .unwrap();
+        assert!(
+            hooks.contains("pane-died"),
+            "pane-died hook not found in: {hooks}"
+        );
+        assert!(
+            hooks.contains("muster _pane-died"),
+            "hook should invoke muster _pane-died: {hooks}"
+        );
+
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pane_died_hook_fires_on_process_exit() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("{SESSION_PREFIX}hookfire_{}", uuid::Uuid::new_v4());
+        let anchor = format!("{SESSION_PREFIX}anchor_{}", uuid::Uuid::new_v4());
+        let marker = format!("/tmp/muster_test_{}", uuid::Uuid::new_v4());
+
+        // Anchor session keeps the tmux server alive while other parallel tests
+        // create and destroy sessions (server exits when the last session dies).
+        client
+            .new_session(&anchor, "anchor", "/tmp", None)
+            .expect("create anchor session");
+
+        // Create a session running "sleep 1" — exits on its own after 1 second.
+        // This avoids relying on send-keys "exit" which can behave differently
+        // across shell types in a detached session.
+        client
+            .new_session(&session_name, "test", "/tmp", Some("sleep 1"))
+            .expect("create session");
+
+        // Set remain-on-exit and hook immediately (sleep is still running)
+        client
+            .cmd(&["set-option", "-t", &session_name, "remain-on-exit", "on"])
+            .unwrap();
+        let hook_cmd = format!("run-shell -b \"touch {marker}\"");
+        client
+            .cmd(&["set-hook", "-t", &session_name, "pane-died", &hook_cmd])
+            .unwrap();
+
+        // Wait for sleep to exit (1s) + time for hook to fire
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+
+        assert!(
+            std::path::Path::new(&marker).exists(),
+            "pane-died hook did not fire (marker file not created)"
+        );
+
+        // Cleanup
+        std::fs::remove_file(&marker).ok();
+        client.kill_session(&session_name).ok();
+        client.kill_session(&anchor).ok();
     }
 }

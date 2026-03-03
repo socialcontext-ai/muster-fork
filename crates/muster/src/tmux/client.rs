@@ -24,6 +24,11 @@ impl TmuxClient {
         Self { tmux_path: path }
     }
 
+    /// Get the tmux binary path.
+    pub fn tmux_path(&self) -> &std::path::Path {
+        &self.tmux_path
+    }
+
     /// Execute a tmux command, returning stdout on success.
     pub fn cmd(&self, args: &[&str]) -> Result<String> {
         let output = Command::new(&self.tmux_path)
@@ -185,7 +190,7 @@ impl TmuxClient {
             "-t",
             session,
             "-F",
-            "#{window_index}\t#{pane_index}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}",
+            "#{pane_id}\t#{window_index}\t#{pane_index}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}",
         ])?;
         Ok(Self::parse_pane_list(&output))
     }
@@ -380,15 +385,16 @@ impl TmuxClient {
             .filter(|line| !line.is_empty())
             .filter_map(|line| {
                 let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() < 5 {
+                if parts.len() < 6 {
                     return None;
                 }
                 Some(TmuxPane {
-                    window_index: parts[0].parse().unwrap_or(0),
-                    index: parts[1].parse().unwrap_or(0),
-                    pid: parts[2].parse().unwrap_or(0),
-                    command: parts[3].to_string(),
-                    cwd: parts[4].to_string(),
+                    pane_id: parts[0].to_string(),
+                    window_index: parts[1].parse().unwrap_or(0),
+                    index: parts[2].parse().unwrap_or(0),
+                    pid: parts[3].parse().unwrap_or(0),
+                    command: parts[4].to_string(),
+                    cwd: parts[5].to_string(),
                 })
             })
             .collect()
@@ -477,17 +483,20 @@ mod tests {
 
     #[test]
     fn test_parse_pane_list() {
-        let output = "0\t0\t12345\tfish\t/Users/sbb/work\n1\t0\t12400\tbash\t/tmp\n1\t1\t12410\tvim\t/tmp\n";
+        let output = "%0\t0\t0\t12345\tfish\t/Users/sbb/work\n%1\t1\t0\t12400\tbash\t/tmp\n%2\t1\t1\t12410\tvim\t/tmp\n";
         let panes = TmuxClient::parse_pane_list(output);
 
         assert_eq!(panes.len(), 3);
+        assert_eq!(panes[0].pane_id, "%0");
         assert_eq!(panes[0].window_index, 0);
         assert_eq!(panes[0].index, 0);
         assert_eq!(panes[0].pid, 12345);
         assert_eq!(panes[0].command, "fish");
         assert_eq!(panes[0].cwd, "/Users/sbb/work");
+        assert_eq!(panes[1].pane_id, "%1");
         assert_eq!(panes[1].window_index, 1);
         assert_eq!(panes[1].pid, 12400);
+        assert_eq!(panes[2].pane_id, "%2");
         assert_eq!(panes[2].window_index, 1);
         assert_eq!(panes[2].index, 1);
         assert_eq!(panes[2].pid, 12410);

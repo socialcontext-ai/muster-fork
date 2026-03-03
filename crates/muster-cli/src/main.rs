@@ -105,6 +105,22 @@ enum Command {
         name: String,
     },
 
+    /// Handle pane death notification (called by tmux hook)
+    #[command(name = "_pane-died", hide = true)]
+    PaneDied {
+        session_name: String,
+        window_name: String,
+        pane_id: String,
+        exit_code: i32,
+    },
+
+    /// Handle bell notification (called by tmux hook)
+    #[command(name = "_bell", hide = true)]
+    Bell {
+        session_name: String,
+        window_name: String,
+    },
+
     /// Profile management
     Profile {
         #[command(subcommand)]
@@ -319,6 +335,24 @@ fn exec_tmux_attach(session: &str) -> ! {
     // exec() only returns on error
     eprintln!("Failed to exec tmux: {err}");
     process::exit(1);
+}
+
+/// Send a notification via tmux display-message.
+///
+/// Desktop notifications (macOS Notification Center) require an app bundle
+/// with a registered CFBundleIdentifier — a bare CLI binary can't get
+/// persistent notification permissions. For now, use tmux display-message
+/// which always works. A Muster.app bundle will enable proper desktop
+/// notifications as a follow-up.
+fn send_notification(summary: &str, body: &str) {
+    let msg = if body.is_empty() {
+        summary.to_string()
+    } else {
+        format!("{summary} — {body}")
+    };
+    let _ = std::process::Command::new(tmux_path())
+        .args(["display-message", "-d", "5000", &msg])
+        .status();
 }
 
 // ---- Process tree support for `muster ps` ----
@@ -877,6 +911,40 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        }
+
+        Command::PaneDied {
+            session_name,
+            window_name,
+            pane_id,
+            exit_code,
+        } => {
+            let display_name = m
+                .client()
+                .get_option(&session_name, "@muster_name")?
+                .unwrap_or_else(|| session_name.clone());
+
+            let summary = format!("Exited: {display_name} \u{25b8} {window_name}");
+            let body = format!("Exit code: {exit_code}");
+
+            send_notification(&summary, &body);
+
+            // Clean up the dead pane
+            let _ = m.client().cmd(&["kill-pane", "-t", &pane_id]);
+        }
+
+        Command::Bell {
+            session_name,
+            window_name,
+        } => {
+            let display_name = m
+                .client()
+                .get_option(&session_name, "@muster_name")?
+                .unwrap_or_else(|| session_name.clone());
+
+            let summary = format!("Bell: {display_name} \u{25b8} {window_name}");
+
+            send_notification(&summary, "");
         }
 
         Command::Status => {

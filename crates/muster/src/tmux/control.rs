@@ -34,6 +34,12 @@ pub enum MusterEvent {
     ClientDetached {
         client: String,
     },
+    SubscriptionChanged {
+        name: String,
+        window_id: String,
+        pane_id: String,
+        value: String,
+    },
 }
 
 /// A parsed line from the control mode stream.
@@ -137,6 +143,17 @@ pub fn parse_control_line(line: &str) -> ControlLine {
             };
         }
     }
+    if let Some(rest) = line.strip_prefix("%subscription-changed ") {
+        let parts: Vec<&str> = rest.splitn(4, ' ').collect();
+        if parts.len() == 4 {
+            return ControlLine::Notification(MusterEvent::SubscriptionChanged {
+                name: parts[0].to_string(),
+                window_id: parts[1].to_string(),
+                pane_id: parts[2].to_string(),
+                value: parts[3].to_string(),
+            });
+        }
+    }
     // Lines inside a response block that aren't framing
     if line.starts_with('%') {
         return ControlLine::Unknown(line.to_string());
@@ -225,6 +242,12 @@ impl ControlMode {
             tx,
             tmux_path: tmux_path.to_path_buf(),
         })
+    }
+
+    /// Take ownership of the control mode's stdin for sending commands.
+    /// Must be called before `spawn_reader()` (which consumes self).
+    pub fn take_stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+        self.child.stdin.take()
     }
 
     /// Spawn a background task that reads the control mode stream and emits events.
@@ -389,6 +412,36 @@ mod tests {
             parsed,
             ControlLine::Notification(MusterEvent::ClientDetached {
                 client: "/dev/ttys001".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_subscription_changed() {
+        let line = "%subscription-changed pd_5 @1 %5 1:0";
+        let parsed = parse_control_line(line);
+        assert_eq!(
+            parsed,
+            ControlLine::Notification(MusterEvent::SubscriptionChanged {
+                name: "pd_5".to_string(),
+                window_id: "@1".to_string(),
+                pane_id: "%5".to_string(),
+                value: "1:0".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_subscription_changed_with_spaces_in_value() {
+        let line = "%subscription-changed bell_1 @2 %10 1 extra data";
+        let parsed = parse_control_line(line);
+        assert_eq!(
+            parsed,
+            ControlLine::Notification(MusterEvent::SubscriptionChanged {
+                name: "bell_1".to_string(),
+                window_id: "@2".to_string(),
+                pane_id: "%10".to_string(),
+                value: "1 extra data".to_string(),
             })
         );
     }
