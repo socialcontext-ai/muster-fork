@@ -197,6 +197,31 @@ impl TmuxClient {
         Ok(())
     }
 
+    /// Set a global tmux server option.
+    pub fn set_global_option(&self, key: &str, value: &str) -> Result<()> {
+        self.cmd(&["set-option", "-g", key, value])?;
+        Ok(())
+    }
+
+    /// Get a global tmux server option.
+    pub fn get_global_option(&self, key: &str) -> Result<Option<String>> {
+        let output = Command::new(&self.tmux_path)
+            .args(["show-option", "-gv", key])
+            .output()
+            .map_err(|e| Error::TmuxError(format!("failed to spawn tmux: {e}")))?;
+
+        if output.status.success() {
+            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if value.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Set a tmux user option on a session.
     pub fn set_option(&self, session: &str, key: &str, value: &str) -> Result<()> {
         self.cmd(&["set-option", "-t", session, key, value])?;
