@@ -461,9 +461,16 @@ mod tests {
         assert_eq!(events.len(), 1);
     }
 
+    fn ensure_anchor() {
+        let Ok(client) = crate::tmux::client::TmuxClient::new() else { return };
+        let _ = client.new_session("muster_test_anchor", "anchor", "/tmp", None);
+        let _ = client.cmd(&["set-option", "-s", "exit-empty", "off"]);
+    }
+
     #[test]
     #[ignore]
     fn test_control_mode_receives_events() {
+        ensure_anchor();
         // Verify that tmux -C control mode produces parseable events.
         // Uses a raw child process (not ControlMode) because -C mode
         // requires careful stdin lifetime management.

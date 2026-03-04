@@ -505,6 +505,19 @@ impl TmuxClient {
 mod tests {
     use super::*;
 
+    /// Ensure the tmux server stays alive for the duration of parallel tests.
+    ///
+    /// Creates an anchor session (to start the server if needed) and sets
+    /// `exit-empty off` so the server doesn't exit when a test kills its
+    /// last session.
+    fn ensure_anchor() {
+        let Ok(client) = TmuxClient::new() else { return };
+        // Always try to create — ignore "duplicate session" errors
+        let _ = client.new_session("muster_test_anchor", "anchor", "/tmp", None);
+        // Belt-and-suspenders: prevent server exit even if anchor is killed
+        let _ = client.cmd(&["set-option", "-s", "exit-empty", "off"]);
+    }
+
     // ---- Unit tests (no tmux needed) ----
 
     #[test]
@@ -636,6 +649,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_and_destroy_session() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
 
@@ -657,6 +671,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_list_sessions_filters_prefix() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let managed_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         let unmanaged_name = format!("personal_test_{}", uuid::Uuid::new_v4());
@@ -680,6 +695,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_list_windows() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
 
@@ -698,6 +714,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_set_and_get_user_option() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -724,6 +741,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_session_with_metadata() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -748,6 +766,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_list_sessions_with_metadata() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -774,6 +793,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_add_window() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -794,6 +814,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_close_window() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -816,6 +837,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_switch_window() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -840,6 +862,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_rename_window() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -859,6 +882,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_split_window() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -889,6 +913,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_get_window_layout() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -920,6 +945,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_select_layout() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client

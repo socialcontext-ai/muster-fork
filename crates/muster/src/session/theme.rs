@@ -432,9 +432,16 @@ mod tests {
         assert_eq!(commands[6][3], "window-status-separator");
     }
 
+    fn ensure_anchor() {
+        let Ok(client) = TmuxClient::new() else { return };
+        let _ = client.new_session("muster_test_anchor", "anchor", "/tmp", None);
+        let _ = client.cmd(&["set-option", "-s", "exit-empty", "off"]);
+    }
+
     #[test]
     #[ignore]
     fn test_apply_theme() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client
@@ -455,6 +462,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_change_color_live() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
         client

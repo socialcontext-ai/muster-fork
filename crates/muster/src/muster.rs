@@ -532,6 +532,12 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn ensure_anchor() {
+        let Ok(client) = crate::TmuxClient::new() else { return };
+        let _ = client.new_session("muster_test_anchor", "anchor", "/tmp", None);
+        let _ = client.cmd(&["set-option", "-s", "exit-empty", "off"]);
+    }
+
     #[test]
     fn test_init_creates_config_dir() {
         let dir = TempDir::new().unwrap();
@@ -557,6 +563,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_full_lifecycle() {
+        ensure_anchor();
         let dir = TempDir::new().unwrap();
         let m = Muster::init(dir.path()).expect("init");
 

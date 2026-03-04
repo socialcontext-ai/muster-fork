@@ -183,6 +183,12 @@ fn setup_hooks(client: &TmuxClient, session_name: &str) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn ensure_anchor() {
+        let Ok(client) = TmuxClient::new() else { return };
+        let _ = client.new_session("muster_test_anchor", "anchor", "/tmp", None);
+        let _ = client.cmd(&["set-option", "-s", "exit-empty", "off"]);
+    }
+
     fn test_profile() -> Profile {
         Profile {
             id: format!("test_{}", uuid::Uuid::new_v4()),
@@ -210,6 +216,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_session_from_profile() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -231,6 +238,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_session_sets_metadata() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -251,6 +259,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_destroy_session() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -265,6 +274,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_with_startup_commands() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -281,6 +291,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_session_sets_remain_on_exit() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -298,6 +309,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_session_sets_alert_bell_hook() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -323,6 +335,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_create_session_sets_pane_died_hook() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = test_profile();
         let session_name = format!("{SESSION_PREFIX}{}", profile.id);
@@ -350,6 +363,7 @@ mod tests {
     fn test_create_session_with_pane_layout() {
         use crate::config::profile::PaneProfile;
 
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let profile = Profile {
             id: format!("test_{}", uuid::Uuid::new_v4()),
@@ -395,24 +409,21 @@ mod tests {
     #[test]
     #[ignore]
     fn test_pane_died_hook_fires_on_process_exit() {
+        ensure_anchor();
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("{SESSION_PREFIX}hookfire_{}", uuid::Uuid::new_v4());
-        let anchor = format!("{SESSION_PREFIX}anchor_{}", uuid::Uuid::new_v4());
         let marker = format!("/tmp/muster_test_{}", uuid::Uuid::new_v4());
-
-        // Anchor session keeps the tmux server alive while other parallel tests
-        // create and destroy sessions (server exits when the last session dies).
-        client
-            .new_session(&anchor, "anchor", "/tmp", None)
-            .expect("create anchor session");
 
         // Use /bin/sh directly to avoid default-shell startup overhead (fish
         // config loading can push total time well past 2s).
+        // sleep 3 gives ample time for the set-option/set-hook commands below
+        // to complete before the process exits, even under heavy parallel test load.
         client
-            .new_session(&session_name, "test", "/tmp", Some("/bin/sh -c 'sleep 1'"))
+            .new_session(&session_name, "test", "/tmp", Some("/bin/sh -c 'sleep 3'"))
             .expect("create session");
 
-        // Set remain-on-exit and hook immediately (sleep is still running)
+        // Set remain-on-exit and hook immediately (sleep is still running).
+        // These MUST complete before sleep exits, otherwise pane-died won't fire.
         client
             .cmd(&["set-option", "-t", &session_name, "remain-on-exit", "on"])
             .unwrap();
@@ -424,7 +435,7 @@ mod tests {
         // Poll for the marker file instead of a fixed sleep — more robust
         // across different systems and load levels.
         let deadline =
-            std::time::Instant::now() + std::time::Duration::from_secs(8);
+            std::time::Instant::now() + std::time::Duration::from_secs(15);
         while std::time::Instant::now() < deadline {
             if std::path::Path::new(&marker).exists() {
                 break;
@@ -440,6 +451,5 @@ mod tests {
         // Cleanup
         std::fs::remove_file(&marker).ok();
         client.kill_session(&session_name).ok();
-        client.kill_session(&anchor).ok();
     }
 }

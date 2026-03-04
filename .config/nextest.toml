@@ -1,0 +1,16 @@
+[test-groups.tmux-integration]
+# Integration tests share a single tmux server and must run serially
+# to avoid server crashes from concurrent access.
+max-threads = 1
+
+[[profile.default.overrides]]
+# All #[ignore]-marked integration tests that interact with tmux.
+# Uses regex on fully-qualified test names.
+filter = """package(muster) & test(\
+  /^(session::tests|\
+     session::theme::tests::test_(apply_theme|change_color)|\
+     tmux::client::tests::test_(create_and|list_sessions_filt|list_windows$|set_and|session_with|list_sessions_with|add_window|close|switch|rename|split|get_window|select)|\
+     tmux::control::tests::test_control|\
+     muster::tests::test_full)/\
+)"""
+test-group = "tmux-integration"
