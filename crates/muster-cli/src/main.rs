@@ -389,9 +389,66 @@ fn tmux_path() -> PathBuf {
     which::which("tmux").unwrap_or_else(|_| PathBuf::from("tmux"))
 }
 
-/// Replace the current process with `tmux attach -t <session>`.
-/// This never returns on success.
-fn exec_tmux_attach(session: &str) -> ! {
+/// Attach to a tmux session.
+///
+/// If already inside tmux (`$TMUX` set), opens a new terminal window with the
+/// session attached instead of nesting. Otherwise replaces the current process
+/// with `tmux attach-session`.
+fn exec_tmux_attach(session: &str, settings: &muster::Settings) -> ! {
+    if std::env::var_os("TMUX").is_some() {
+        // Inside tmux — open a new terminal window instead of nesting.
+        let terminal = settings
+            .terminal
+            .as_deref()
+            .unwrap_or("ghostty");
+        let tmux = tmux_path();
+        let tmux_str = tmux.to_string_lossy();
+
+        match terminal {
+            "ghostty" => {
+                let cmd = format!("{tmux_str} attach -t {session}");
+                let _ = std::process::Command::new("open")
+                    .args([
+                        "-na",
+                        "Ghostty.app",
+                        "--args",
+                        "--quit-after-last-window-closed=true",
+                        &format!("--command={cmd}"),
+                    ])
+                    .status();
+            }
+            "alacritty" => {
+                let _ = std::process::Command::new("open")
+                    .args([
+                        "-na",
+                        "Alacritty.app",
+                        "--args",
+                        "-e",
+                        &*tmux_str,
+                        "attach",
+                        "-t",
+                        session,
+                    ])
+                    .status();
+            }
+            _ => {
+                let app = if terminal == "terminal" { "Terminal" } else { terminal };
+                let cmd = format!("{tmux_str} attach -t {session}");
+                let script = format!(
+                    "tell application \"{app}\"\n\
+                         activate\n\
+                         do script \"{cmd}\"\n\
+                     end tell"
+                );
+                let _ = std::process::Command::new("osascript")
+                    .args(["-e", &script])
+                    .status();
+            }
+        }
+
+        process::exit(0);
+    }
+
     let err = std::process::Command::new(tmux_path())
         .args(["attach-session", "-t", session])
         .exec();
@@ -724,6 +781,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let config_dir = cli.config_dir.unwrap_or_else(default_config_dir);
     let m = Muster::init(&config_dir)?;
+    let settings = m.settings().unwrap_or_default();
 
     match cli.command {
         Command::List => {
@@ -786,7 +844,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Launched: {} ({})", info.display_name, info.session_name);
             } else {
                 // Replace this process with tmux attach
-                exec_tmux_attach(&info.session_name);
+                exec_tmux_attach(&info.session_name, &settings);
             }
         }
 
@@ -797,7 +855,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 m.switch_window(&session_name, idx)?;
             }
 
-            exec_tmux_attach(&session_name);
+            exec_tmux_attach(&session_name, &settings);
         }
 
         Command::Kill { session } => {
@@ -832,7 +890,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else if detach {
                 println!("Created: {} ({})", info.display_name, info.session_name);
             } else {
-                exec_tmux_attach(&info.session_name);
+                exec_tmux_attach(&info.session_name, &settings);
             }
         }
 
