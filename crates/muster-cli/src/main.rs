@@ -417,8 +417,9 @@ fn send_notification(
             .unwrap_or_default()
             .join("muster/MusterNotify.app");
         if app_dir.exists() {
-            let status = std::process::Command::new("open")
+            let spawned = std::process::Command::new("open")
                 .args([
+                    "-n",
                     app_dir.to_str().unwrap_or_default(),
                     "--args",
                     summary,
@@ -432,8 +433,8 @@ fn send_notification(
                     "--timeout",
                     "30",
                 ])
-                .status();
-            if status.is_ok_and(|s| s.success()) {
+                .spawn();
+            if spawned.is_ok() {
                 return;
             }
         }

@@ -35,8 +35,8 @@ tmux show-hooks -w -t "$SESSION" 2>/dev/null || true
 echo
 
 echo "Attaching to session. Watch for tmux display-messages:"
-echo "  1. After 3s — Worker tab's shell will exit (pane-died notification)"
-echo "  2. After 6s — Bell in Shell tab (alert-bell notification)"
+echo "  1. After 3s  — Worker tab's shell will exit (pane-died notification)"
+echo "  2. After 11s — Bell in Shell tab (alert-bell notification)"
 echo
 echo "Press Enter to attach..."
 read -r
@@ -47,7 +47,7 @@ read -r
     # Trigger pane-died: exit the Worker shell
     tmux send-keys -t "${SESSION}:1" "exit" Enter
 
-    sleep 3
+    sleep 8
     # Trigger alert-bell: switch to Worker tab first so Shell is background,
     # then send bell to Shell
     tmux select-window -t "${SESSION}:1" 2>/dev/null || true
