@@ -2,7 +2,7 @@ pub mod theme;
 
 use crate::config::profile::{Profile, TabProfile};
 use crate::error::Result;
-use crate::tmux::client::{TmuxClient, SESSION_PREFIX};
+use crate::tmux::client::{quote_tmux, quote_tmux_cmd, TmuxClient, SESSION_PREFIX};
 use crate::tmux::types::{SessionInfo, TmuxWindow};
 
 /// Resolve the shell to use for new tmux panes.
@@ -17,73 +17,200 @@ pub fn resolve_shell(shell_setting: Option<&str>) -> Option<String> {
     std::env::var("SHELL").ok().filter(|s| !s.is_empty())
 }
 
-/// Set up panes within a window based on the tab profile.
+/// Build tmux command strings for pane setup within a window.
 ///
-/// If the tab has panes defined, creates splits and applies the layout.
-/// Otherwise, falls back to single-pane behavior (send tab-level command).
-fn setup_window_panes(
-    client: &TmuxClient,
+/// If the tab has panes defined, emits split-window, select-layout, and
+/// send-keys commands. Otherwise, emits a single send-keys for the tab command.
+fn build_window_pane_commands(
     session_name: &str,
     window_index: u32,
     tab: &TabProfile,
     shell: Option<&str>,
-) -> Result<()> {
+) -> Vec<String> {
+    let mut commands = Vec::new();
+
     if tab.panes.is_empty() {
         // Single-pane behavior: send tab-level command
         if let Some(ref cmd) = tab.command {
-            client.send_keys(session_name, window_index, cmd)?;
+            let target = format!("{session_name}:{window_index}");
+            commands.push(format!(
+                "send-keys -t {} {} Enter",
+                target,
+                quote_tmux(cmd),
+            ));
         }
-        return Ok(());
+        return commands;
     }
 
     // Multi-pane: create splits for panes after the first
     for pane in tab.panes.iter().skip(1) {
         let cwd = pane.cwd.as_deref().unwrap_or(&tab.cwd);
-        client.split_window(session_name, window_index, cwd, shell)?;
+        let target = format!("{session_name}:{window_index}");
+        let mut cmd = format!("split-window -t {} -c {}", target, quote_tmux(cwd));
+        if let Some(sh) = shell {
+            cmd.push(' ');
+            cmd.push_str(&quote_tmux(sh));
+        }
+        commands.push(cmd);
     }
 
-    // Apply layout (must happen after all splits are created).
-    // Best-effort: a bad or stale layout string shouldn't prevent session creation.
+    // Apply layout (must happen after all splits are created)
     if let Some(ref layout) = tab.layout {
-        if let Err(e) = client.select_layout(session_name, window_index, layout) {
-            tracing::warn!(window_index, %e, "failed to apply saved layout, using default");
-        }
+        let target = format!("{session_name}:{window_index}");
+        commands.push(format!(
+            "select-layout -t {} {}",
+            target,
+            quote_tmux(layout),
+        ));
     }
 
     // Send commands to each pane
     for (pane_idx, pane) in tab.panes.iter().enumerate() {
-        let idx = u32::try_from(pane_idx).unwrap_or(0);
+        let target = format!("{session_name}:{window_index}.{pane_idx}");
 
         // If pane 0 has a different cwd than the tab, cd into it
         if pane_idx == 0 {
             if let Some(ref pane_cwd) = pane.cwd {
                 if pane_cwd != &tab.cwd {
-                    client.send_keys_to_pane(
-                        session_name,
-                        window_index,
-                        idx,
-                        &format!("cd {pane_cwd}"),
-                    )?;
+                    commands.push(format!(
+                        "send-keys -t {} {} Enter",
+                        target,
+                        quote_tmux(&format!("cd {pane_cwd}")),
+                    ));
                 }
             }
         }
 
         if let Some(ref cmd) = pane.command {
-            client.send_keys_to_pane(session_name, window_index, idx, cmd)?;
+            commands.push(format!(
+                "send-keys -t {} {} Enter",
+                target,
+                quote_tmux(cmd),
+            ));
         }
     }
 
-    Ok(())
+    commands
+}
+
+/// Build the complete list of tmux commands for a launch batch.
+///
+/// This produces all commands that should run after the initial `new-session`:
+/// - default-command (if shell specified)
+/// - Per-window pane setup (splits, layouts, send-keys)
+/// - new-window for additional tabs
+/// - Session metadata (@muster_name, @muster_color, @muster_profile)
+/// - Per-window pinned markers and tab names
+/// - Notification hooks (remain-on-exit, pane-died, alert-bell)
+/// - Theme commands (session styling, per-window styling, theme hooks)
+fn build_launch_commands(
+    session_name: &str,
+    profile: &Profile,
+    shell: Option<&str>,
+) -> Result<Vec<String>> {
+    let mut commands = Vec::new();
+
+    let first_tab = profile.tabs.first().cloned().unwrap_or_else(|| TabProfile {
+        name: "Shell".to_string(),
+        cwd: "/tmp".to_string(),
+        command: None,
+        layout: None,
+        panes: vec![],
+    });
+
+    // Set default-command so panes the user creates manually also use the right shell
+    if let Some(sh) = shell {
+        commands.push(format!(
+            "set-option -t {} default-command {}",
+            session_name,
+            quote_tmux(sh),
+        ));
+    }
+
+    // Set up first window (panes or single-pane)
+    commands.extend(build_window_pane_commands(
+        session_name,
+        0,
+        &first_tab,
+        shell,
+    ));
+
+    // Create additional windows and set up their panes
+    for (i, tab) in profile.tabs.iter().enumerate().skip(1) {
+        let index = u32::try_from(i).unwrap_or(0);
+        let mut new_win_cmd = format!(
+            "new-window -t {} -n {} -c {}",
+            session_name,
+            quote_tmux(&tab.name),
+            quote_tmux(&tab.cwd),
+        );
+        if let Some(sh) = shell {
+            new_win_cmd.push(' ');
+            new_win_cmd.push_str(&quote_tmux(sh));
+        }
+        commands.push(new_win_cmd);
+        commands.extend(build_window_pane_commands(session_name, index, tab, shell));
+    }
+
+    // Set metadata
+    commands.push(format!(
+        "set-option -t {} @muster_name {}",
+        session_name,
+        quote_tmux(&profile.name),
+    ));
+    commands.push(format!(
+        "set-option -t {} @muster_color {}",
+        session_name,
+        quote_tmux(&profile.color),
+    ));
+    commands.push(format!(
+        "set-option -t {} @muster_profile {}",
+        session_name,
+        quote_tmux(&profile.id),
+    ));
+
+    // Mark all profile-created windows as pinned
+    let window_count = profile.tabs.len().max(1);
+    for (i, tab) in profile.tabs.iter().enumerate() {
+        let target = format!("{session_name}:{i}");
+        commands.push(format!("set-window-option -t {target} @muster_pinned 1"));
+        commands.push(format!(
+            "set-window-option -t {target} @muster_tab_name {}",
+            quote_tmux(&tab.name),
+        ));
+    }
+    // Handle the case where profile has no tabs (default Shell tab)
+    if profile.tabs.is_empty() {
+        let target = format!("{session_name}:0");
+        commands.push(format!("set-window-option -t {target} @muster_pinned 1"));
+        commands.push(format!(
+            "set-window-option -t {target} @muster_tab_name {}",
+            quote_tmux("Shell"),
+        ));
+    }
+
+    // Notification hooks: remain-on-exit, pane-died, alert-bell
+    commands.extend(build_hook_commands(session_name, window_count));
+
+    // Theme commands
+    commands.extend(theme::build_launch_theme_commands(
+        session_name,
+        &profile.color,
+        &profile.name,
+        window_count,
+    )?);
+
+    // Select window 0 so the session starts on the first tab
+    commands.push(format!("select-window -t {session_name}:0"));
+
+    Ok(commands)
 }
 
 /// Create a tmux session from a profile.
 ///
 /// Steps:
-/// 1. Create detached session with first tab
-/// 2. Set `default-command` so manually-created panes use the right shell
-/// 3. Create additional windows for remaining tabs
-/// 4. Send startup commands to tabs that have them
-/// 5. Set `@muster_*` metadata
+/// 1. Create detached session with first tab (standalone — starts the server)
+/// 2. Batch everything else via `source-file` (one spawn for ~50 commands)
 pub fn create_from_profile(
     client: &TmuxClient,
     profile: &Profile,
@@ -99,41 +226,14 @@ pub fn create_from_profile(
         panes: vec![],
     });
 
-    // Create the session with the first window
+    // Create the session with the first window (must be standalone — starts the server)
     client.new_session(&session_name, &first_tab.name, &first_tab.cwd, shell)?;
 
-    // Set default-command so panes the user creates manually also use the right shell
-    if let Some(sh) = shell {
-        client.set_option(&session_name, "default-command", sh)?;
-    }
+    // Build and execute all remaining commands as a batch
+    let commands = build_launch_commands(&session_name, profile, shell)?;
+    client.source_file(&commands)?;
 
-    // Set up first window (panes or single-pane)
-    setup_window_panes(client, &session_name, 0, &first_tab, shell)?;
-
-    // Create additional windows
-    for (i, tab) in profile.tabs.iter().enumerate().skip(1) {
-        let index = u32::try_from(i).unwrap_or(0);
-        client.new_window(&session_name, &tab.name, &tab.cwd, shell)?;
-        setup_window_panes(client, &session_name, index, tab, shell)?;
-    }
-
-    // Set metadata
-    client.set_session_metadata(
-        &session_name,
-        &profile.name,
-        &profile.color,
-        Some(&profile.id),
-    )?;
-
-    // Mark all profile-created windows as pinned (before apply_theme sees them)
-    let windows = client.list_windows(&session_name)?;
-    for win in &windows {
-        client.set_window_option(&session_name, win.index, "@muster_pinned", "1")?;
-        client.set_window_option(&session_name, win.index, "@muster_tab_name", &win.name)?;
-    }
-
-    // Set up notification hooks (pane-died, alert-bell)
-    setup_hooks(client, &session_name)?;
+    let window_count = u32::try_from(profile.tabs.len().max(1)).unwrap_or(1);
 
     // Return session info
     Ok(SessionInfo {
@@ -141,7 +241,7 @@ pub fn create_from_profile(
         display_name: profile.name.clone(),
         color: profile.color.clone(),
         profile_id: Some(profile.id.clone()),
-        window_count: u32::try_from(windows.len()).unwrap_or(0),
+        window_count,
         attached: false,
     })
 }
@@ -156,27 +256,43 @@ pub fn get_windows(client: &TmuxClient, session_name: &str) -> Result<Vec<TmuxWi
     client.list_windows(session_name)
 }
 
-/// Set up tmux hooks for session notifications.
+/// Build tmux command strings for session notification hooks.
 ///
-/// Installs `pane-died` and `alert-bell` hooks that invoke one-shot `muster`
-/// subcommands to deliver desktop notifications. Also sets `remain-on-exit on`
-/// so the `pane-died` hook fires before the pane is destroyed.
-fn setup_hooks(client: &TmuxClient, session_name: &str) -> Result<()> {
-    client.cmd(&["set-option", "-t", session_name, "remain-on-exit", "on"])?;
-
+/// Produces per-window `remain-on-exit on` and `pane-died` hooks,
+/// plus a session-level `alert-bell` hook.
+///
+/// `pane-died` is a window-level hook and `remain-on-exit` is a pane option,
+/// so both must be set on each window explicitly to cover all tabs.
+fn build_hook_commands(session_name: &str, window_count: usize) -> Vec<String> {
     let pane_died_hook = concat!(
         "run-shell -b \"muster _pane-died",
         " #{session_name} '#{window_name}' #{pane_id} #{pane_dead_status}\""
     );
-    client.cmd(&["set-hook", "-t", session_name, "pane-died", pane_died_hook])?;
 
     let bell_hook = concat!(
         "run-shell -b \"muster _bell",
         " #{session_name} '#{window_name}'\""
     );
-    client.cmd(&["set-hook", "-t", session_name, "alert-bell", bell_hook])?;
 
-    Ok(())
+    let pane_died_quoted = quote_tmux_cmd(pane_died_hook);
+
+    let mut commands = Vec::new();
+
+    // Per-window: remain-on-exit and pane-died hook
+    for i in 0..window_count {
+        let target = format!("{session_name}:{i}");
+        commands.push(format!("set-option -w -t {target} remain-on-exit on"));
+        commands.push(format!("set-hook -w -t {target} pane-died {pane_died_quoted}"));
+    }
+
+    // Session-level alert-bell hook
+    commands.push(format!(
+        "set-hook -t {} alert-bell {}",
+        session_name,
+        quote_tmux_cmd(bell_hook),
+    ));
+
+    commands
 }
 
 #[cfg(test)]

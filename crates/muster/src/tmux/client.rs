@@ -1,8 +1,28 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{Error, Result};
 use crate::tmux::types::{PaneContext, SessionInfo, TmuxPane, TmuxSession, TmuxWindow};
+
+/// Quote a value for use in a tmux source-file.
+///
+/// Uses double quoting with `"` and `\` escaping. Suitable for option
+/// values, window names, paths, format strings, etc.
+pub fn quote_tmux(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// Quote a command value for use in a tmux source-file.
+///
+/// Uses tmux brace quoting `{...}` which treats all content as literal.
+/// Suitable for hook commands and other arguments that are themselves
+/// tmux commands (may contain single quotes, double quotes, and `#{}`
+/// format strings that should be preserved literally).
+pub fn quote_tmux_cmd(value: &str) -> String {
+    format!("{{{value}}}")
+}
 
 /// Prefix for all muster-managed tmux sessions.
 pub const SESSION_PREFIX: &str = "muster_";
@@ -46,6 +66,37 @@ impl TmuxClient {
             }
             Err(Error::TmuxError(stderr.into_owned()))
         }
+    }
+
+    /// Execute a batch of tmux commands via `source-file`.
+    ///
+    /// Writes `commands` (one tmux command per line) to a temp file, then
+    /// executes `tmux source-file <path>`. The temp file is deleted in all
+    /// code paths, including errors.
+    pub fn source_file(&self, commands: &[String]) -> Result<()> {
+        if commands.is_empty() {
+            return Ok(());
+        }
+
+        let mut tmp = tempfile::NamedTempFile::new()
+            .map_err(|e| Error::TmuxError(format!("failed to create temp file: {e}")))?;
+
+        for cmd in commands {
+            writeln!(tmp, "{cmd}")
+                .map_err(|e| Error::TmuxError(format!("failed to write temp file: {e}")))?;
+        }
+
+        let path = tmp.path().to_path_buf();
+        // Flush so tmux can read the complete file
+        tmp.as_file()
+            .sync_all()
+            .map_err(|e| Error::TmuxError(format!("failed to sync temp file: {e}")))?;
+
+        let result = self.cmd(&["source-file", &path.display().to_string()]);
+
+        // tmp is dropped here (deleted) regardless of result
+        drop(tmp);
+        result.map(|_| ())
     }
 
     /// Build the argument list for a tmux command. Exposed for testing.

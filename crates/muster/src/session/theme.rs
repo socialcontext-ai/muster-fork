@@ -211,6 +211,80 @@ impl ThemeValues {
     }
 }
 
+/// Build tmux command strings for theming a newly-launched session.
+///
+/// During launch, all windows are pinned and the window count is known from
+/// the profile. This avoids the `list_windows` + `get_window_option` queries
+/// that `apply_theme` uses for live color changes.
+pub fn build_launch_theme_commands(
+    session: &str,
+    color: &str,
+    display_name: &str,
+    window_count: usize,
+) -> Result<Vec<String>> {
+    use crate::tmux::client::{quote_tmux, quote_tmux_cmd};
+
+    let color = resolve_color(color)?;
+    let tv = ThemeValues::new(&color, display_name)?;
+
+    let mut commands = Vec::new();
+
+    // Session-level options (status-style, status-left, status-position, mouse)
+    for cmd in &tv.session_commands(session) {
+        let args: Vec<&str> = cmd.iter().map(String::as_str).collect();
+        // Format: "set-option -t session key value"
+        // Last arg may contain spaces, so quote it
+        let last = args.last().unwrap();
+        let leading: Vec<&str> = args[..args.len() - 1].to_vec();
+        commands.push(format!("{} {}", leading.join(" "), quote_tmux(last)));
+    }
+
+    // Per-window pinned styling (all windows are pinned at launch)
+    for window_index in 0..window_count {
+        let target = format!("{session}:{window_index}");
+        for (key, value) in &tv.window_options() {
+            commands.push(format!(
+                "set-window-option -t {} {} {}",
+                target,
+                key,
+                quote_tmux(value),
+            ));
+        }
+    }
+
+    // Hook: new windows get neutral styling (they're unpinned by default)
+    // Use brace quoting for hook commands (they contain single quotes)
+    commands.push(format!(
+        "set-hook -t {} after-new-window {}",
+        session,
+        quote_tmux_cmd(&ThemeValues::neutral_hook_command()),
+    ));
+
+    // Hook: mark pinned windows as layout-stale when panes are split
+    commands.push(format!(
+        "set-hook -t {} after-split-window {}",
+        session,
+        quote_tmux_cmd("if-shell -F '#{@muster_pinned}' 'set-window-option @muster_layout_stale 1'"),
+    ));
+
+    // Hook: sync window renames to the profile for pinned windows
+    let muster_bin = std::env::current_exe()
+        .unwrap_or_else(|_| "muster".into())
+        .display()
+        .to_string();
+    let rename_hook = format!(
+        "run-shell '{muster_bin} sync-rename \
+         #{{session_name}} #{{window_index}} \"#{{window_name}}\"'"
+    );
+    commands.push(format!(
+        "set-hook -t {} after-rename-window {}",
+        session,
+        quote_tmux_cmd(&rename_hook),
+    ));
+
+    Ok(commands)
+}
+
 /// Build the list of tmux commands for theming a session (for testing).
 pub fn build_theme_commands(
     session: &str,

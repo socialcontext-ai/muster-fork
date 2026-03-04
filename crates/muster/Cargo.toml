@@ -17,8 +17,8 @@ tracing = { workspace = true }
 dirs = { workspace = true }
 which = { workspace = true }
 uuid = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 rstest = { workspace = true }
 tokio-test = { workspace = true }

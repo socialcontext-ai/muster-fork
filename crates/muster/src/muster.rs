@@ -137,16 +137,8 @@ impl Muster {
         let settings = self.settings.load()?;
         let shell = session::resolve_shell(settings.shell.as_deref());
 
-        // Create from profile
+        // Create from profile (includes theme application via batched source-file)
         let info = session::create_from_profile(&self.client, &profile, shell.as_deref())?;
-
-        // Apply theme
-        session::theme::apply_theme(
-            &self.client,
-            &info.session_name,
-            &profile.color,
-            &profile.name,
-        )?;
 
         Ok(info)
     }
