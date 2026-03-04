@@ -2,13 +2,24 @@ use std::path::{Path, PathBuf};
 
 use tokio::sync::broadcast;
 
-use crate::config::profile::{Profile, ProfileStore, TabProfile};
+use crate::config::profile::{PaneProfile, Profile, ProfileStore, TabProfile};
 use crate::config::settings::{Settings, SettingsStore};
 use crate::error::{Error, Result};
 use crate::session;
 use crate::tmux::client::TmuxClient;
 use crate::tmux::control::MusterEvent;
 use crate::tmux::types::{PaneContext, SessionInfo};
+
+/// Result of a `pin` operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PinResult {
+    /// Window was newly pinned to the profile.
+    Pinned,
+    /// Window was already pinned; layout was updated.
+    LayoutUpdated,
+    /// Window was already pinned; layout unchanged.
+    AlreadyCurrent,
+}
 
 /// Main facade for the muster library.
 ///
@@ -219,8 +230,38 @@ impl Muster {
         self.client.resolve_pane_context(&pane_id)
     }
 
+    /// Capture the current pane layout for a window and return (layout, panes).
+    ///
+    /// If the window has only one pane, returns `(None, vec![])`.
+    fn capture_window_layout(
+        &self,
+        session: &str,
+        window_index: u32,
+    ) -> Result<(Option<String>, Vec<PaneProfile>)> {
+        let tmux_panes = self.client.list_window_panes(session, window_index)?;
+        if tmux_panes.len() <= 1 {
+            return Ok((None, vec![]));
+        }
+        let layout = self.client.get_window_layout(session, window_index)?;
+        let layout = if layout.is_empty() {
+            None
+        } else {
+            Some(layout)
+        };
+        let panes = tmux_panes
+            .iter()
+            .map(|p| PaneProfile {
+                cwd: Some(p.cwd.clone()),
+                command: None,
+            })
+            .collect();
+        Ok((layout, panes))
+    }
+
     /// Pin the current window to the session's profile.
-    pub fn pin_window(&self) -> Result<()> {
+    ///
+    /// First pin adds the window. Re-pin updates the pane layout.
+    pub fn pin_window(&self) -> Result<PinResult> {
         let ctx = self.resolve_current_pane()?;
 
         // Must be a muster-managed session
@@ -229,14 +270,18 @@ impl Muster {
             .get_option(&ctx.session_name, "@muster_profile")?
             .ok_or(Error::NotMusterSession)?;
 
-        // Already pinned — no-op
+        // Already pinned — re-pin to update layout
         if self
             .client
             .get_window_option(&ctx.session_name, ctx.window_index, "@muster_pinned")?
             .is_some()
         {
-            return Ok(());
+            return self.update_pinned_layout(&ctx, &profile_id);
         }
+
+        // Capture pane layout for the new pin
+        let (layout, panes) =
+            self.capture_window_layout(&ctx.session_name, ctx.window_index)?;
 
         // Insert tab at the position matching its rank among pinned windows
         let mut profile = self
@@ -253,6 +298,8 @@ impl Muster {
                 name: ctx.window_name.clone(),
                 cwd: ctx.cwd.clone(),
                 command: None,
+                layout,
+                panes,
             },
         );
         self.profiles.update(profile)?;
@@ -283,7 +330,76 @@ impl Muster {
             &ctx.window_name,
         )?;
 
-        Ok(())
+        Ok(PinResult::Pinned)
+    }
+
+    /// Update the pane layout for an already-pinned window.
+    ///
+    /// Captures the current pane geometry from tmux and updates the profile.
+    /// Preserves existing per-pane commands where pane indices match.
+    fn update_pinned_layout(
+        &self,
+        ctx: &PaneContext,
+        profile_id: &str,
+    ) -> Result<PinResult> {
+        let (new_layout, new_panes) =
+            self.capture_window_layout(&ctx.session_name, ctx.window_index)?;
+
+        let mut profile = self
+            .profiles
+            .get(profile_id)?
+            .ok_or_else(|| Error::ProfileNotFound(profile_id.to_string()))?;
+
+        let tab_pos = self.pinned_rank(&ctx.session_name, ctx.window_index)?;
+        let Some(tab) = profile.tabs.get_mut(tab_pos) else {
+            return Ok(PinResult::AlreadyCurrent);
+        };
+
+        // Check if anything actually changed
+        if tab.layout == new_layout && tab.panes.len() == new_panes.len() {
+            let cwds_match = tab
+                .panes
+                .iter()
+                .zip(new_panes.iter())
+                .all(|(old, new)| old.cwd == new.cwd);
+            if cwds_match {
+                // Clear the stale indicator even if nothing changed
+                let _ = self.client.unset_window_option(
+                    &ctx.session_name,
+                    ctx.window_index,
+                    "@muster_layout_stale",
+                );
+                return Ok(PinResult::AlreadyCurrent);
+            }
+        }
+
+        // Merge: preserve existing per-pane commands where indices match
+        let merged_panes: Vec<PaneProfile> = new_panes
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut new_pane)| {
+                if let Some(old_pane) = tab.panes.get(i) {
+                    if new_pane.command.is_none() {
+                        new_pane.command = old_pane.command.clone();
+                    }
+                }
+                new_pane
+            })
+            .collect();
+
+        tab.layout = new_layout;
+        tab.panes = merged_panes;
+
+        self.profiles.update(profile)?;
+
+        // Clear the stale indicator now that the layout is saved
+        let _ = self.client.unset_window_option(
+            &ctx.session_name,
+            ctx.window_index,
+            "@muster_layout_stale",
+        );
+
+        Ok(PinResult::LayoutUpdated)
     }
 
     /// Unpin the current window from the session's profile.
@@ -453,6 +569,8 @@ mod tests {
                 name: "Shell".to_string(),
                 cwd: "/tmp".to_string(),
                 command: None,
+                layout: None,
+                panes: vec![],
             }],
         };
 

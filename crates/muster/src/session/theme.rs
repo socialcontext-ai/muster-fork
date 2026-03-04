@@ -139,16 +139,26 @@ impl ThemeValues {
         ]
     }
 
+    /// Stale layout indicator: yellow dot, shown conditionally via tmux format.
+    const STALE_INDICATOR: &'static str =
+        "#{?#{@muster_layout_stale},#[fg=#c4a000]\u{25cf} ,}";
+
     /// Window-level option key/value pairs for window-status styling.
     pub fn window_options(&self) -> Vec<(String, String)> {
         vec![
             (
                 "window-status-format".into(),
-                format!("#[bg={},fg={}]  #I: #W  ", self.color, self.fg),
+                format!(
+                    "#[bg={},fg={}]  #I: #W {}",
+                    self.color, self.fg, Self::STALE_INDICATOR
+                ),
             ),
             (
                 "window-status-current-format".into(),
-                format!("#[fg={},bg=#000000,bold]  #I: #W  #[default]", self.color),
+                format!(
+                    "#[fg={},bg=#000000,bold]  #I: #W {}#[default]",
+                    self.color, Self::STALE_INDICATOR
+                ),
             ),
             ("window-status-separator".into(), String::new()),
         ]
@@ -294,6 +304,15 @@ pub fn apply_theme(
         session,
         "after-new-window",
         &ThemeValues::neutral_hook_command(),
+    ])?;
+
+    // Hook marks pinned windows as layout-stale when panes are split
+    client.cmd(&[
+        "set-hook",
+        "-t",
+        session,
+        "after-split-window",
+        "if-shell -F '#{@muster_pinned}' 'set-window-option @muster_layout_stale 1'",
     ])?;
 
     // Hook syncs window renames to the profile for pinned windows

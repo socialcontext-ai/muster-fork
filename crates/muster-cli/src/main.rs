@@ -232,7 +232,13 @@ fn parse_tab(input: &str) -> Result<TabProfile, String> {
         .get(2)
         .map(std::string::ToString::to_string)
         .filter(|s| !s.is_empty());
-    Ok(TabProfile { name, cwd, command })
+    Ok(TabProfile {
+        name,
+        cwd,
+        command,
+        layout: None,
+        panes: vec![],
+    })
 }
 
 /// Build tabs from `--tab` flags, defaulting to a single Shell tab at $HOME.
@@ -244,6 +250,8 @@ fn build_tabs(raw: &[String]) -> Result<Vec<TabProfile>, String> {
             name: "Shell".to_string(),
             cwd: home,
             command: None,
+            layout: None,
+            panes: vec![],
         }]);
     }
     raw.iter().map(|s| parse_tab(s)).collect()
@@ -276,6 +284,18 @@ struct EditableTab {
     cwd: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    layout: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    panes: Vec<EditablePane>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct EditablePane {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    command: Option<String>,
 }
 
 impl From<&Profile> for EditableProfile {
@@ -290,6 +310,15 @@ impl From<&Profile> for EditableProfile {
                     name: t.name.clone(),
                     cwd: t.cwd.clone(),
                     command: t.command.clone(),
+                    layout: t.layout.clone(),
+                    panes: t
+                        .panes
+                        .iter()
+                        .map(|p| EditablePane {
+                            cwd: p.cwd.clone(),
+                            command: p.command.clone(),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -309,6 +338,15 @@ impl EditableProfile {
                     name: t.name,
                     cwd: t.cwd,
                     command: t.command,
+                    layout: t.layout,
+                    panes: t
+                        .panes
+                        .into_iter()
+                        .map(|p| muster::PaneProfile {
+                            cwd: p.cwd,
+                            command: p.command,
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -1084,7 +1122,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(windows) = m.client().list_windows(&s.session_name) {
                         for w in &windows {
                             let marker = if w.active { "→" } else { " " };
-                            println!("  {marker} {}: {} ({})", w.index, w.name, w.cwd);
+                            let stale = m
+                                .client()
+                                .get_window_option(
+                                    &s.session_name,
+                                    w.index,
+                                    "@muster_layout_stale",
+                                )
+                                .ok()
+                                .flatten()
+                                .is_some();
+                            let stale_tag = if stale {
+                                if std::io::stdout().is_terminal() {
+                                    " \x1b[33;1m(layout unsaved)\x1b[0m"
+                                } else {
+                                    " (layout unsaved)"
+                                }
+                            } else {
+                                ""
+                            };
+                            println!(
+                                "  {marker} {}: {} ({}){stale_tag}",
+                                w.index, w.name, w.cwd
+                            );
                         }
                     }
                 }
@@ -1159,9 +1219,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Pin => {
-            m.pin_window()?;
+            let result = m.pin_window()?;
             if !cli.json {
-                println!("Window pinned to profile.");
+                match result {
+                    muster::PinResult::Pinned => println!("Window pinned to profile."),
+                    muster::PinResult::LayoutUpdated => println!("Layout saved to profile."),
+                    muster::PinResult::AlreadyCurrent => println!("Layout already up to date."),
+                }
             }
         }
 
@@ -1266,6 +1330,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     name,
                     cwd,
                     command,
+                    layout: None,
+                    panes: vec![],
                 });
 
                 let saved = m.update_profile(updated)?;
@@ -1293,6 +1359,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                             .as_deref()
                             .map_or(String::new(), |c| format!(" — {c}"));
                         println!("  [{i}] {}: {}{cmd}", tab.name, tab.cwd);
+                        if !tab.panes.is_empty() {
+                            if let Some(ref layout) = tab.layout {
+                                println!("      layout: {layout}");
+                            }
+                            for (pi, pane) in tab.panes.iter().enumerate() {
+                                let pane_cwd = pane
+                                    .cwd
+                                    .as_deref()
+                                    .unwrap_or("(inherit)");
+                                let pane_cmd = pane
+                                    .command
+                                    .as_deref()
+                                    .map_or(String::new(), |c| format!(" — {c}"));
+                                println!("      pane {pi}: {pane_cwd}{pane_cmd}");
+                            }
+                        }
                     }
                 }
             }

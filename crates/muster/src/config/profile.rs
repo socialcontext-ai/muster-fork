@@ -56,6 +56,19 @@ pub struct Profile {
 pub struct TabProfile {
     pub name: String,
     pub cwd: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panes: Vec<PaneProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PaneProfile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
 }
 
@@ -166,6 +179,8 @@ mod tests {
                 name: "Shell".to_string(),
                 cwd: "/tmp".to_string(),
                 command: None,
+                layout: None,
+                panes: vec![],
             }],
         }
     }
@@ -267,6 +282,8 @@ mod tests {
             name: "Server".to_string(),
             cwd: "/home".to_string(),
             command: Some("npm start".to_string()),
+            layout: None,
+            panes: vec![],
         });
 
         let result = store.update(updated).unwrap();
@@ -338,11 +355,15 @@ mod tests {
                     name: "Shell".to_string(),
                     cwd: "/tmp".to_string(),
                     command: None,
+                    layout: None,
+                    panes: vec![],
                 },
                 TabProfile {
                     name: "Server".to_string(),
                     cwd: "/home/user/app".to_string(),
                     command: Some("npm run dev".to_string()),
+                    layout: None,
+                    panes: vec![],
                 },
             ],
         };
@@ -350,5 +371,116 @@ mod tests {
         let json = serde_json::to_string(&profile).unwrap();
         let deserialized: Profile = serde_json::from_str(&json).unwrap();
         assert_eq!(profile, deserialized);
+    }
+
+    #[test]
+    fn test_pane_profile_serde_roundtrip() {
+        let profile = Profile {
+            id: "pane_test".to_string(),
+            name: "Pane Layout Test".to_string(),
+            color: "#00ff00".to_string(),
+            tabs: vec![TabProfile {
+                name: "Dev".to_string(),
+                cwd: "/home/user/project".to_string(),
+                command: None,
+                layout: Some("5a4a,204x51,0,0{102x51,0,0,0,101x51,103,0,1}".to_string()),
+                panes: vec![
+                    PaneProfile {
+                        cwd: Some("/home/user/project/src".to_string()),
+                        command: Some("vim .".to_string()),
+                    },
+                    PaneProfile {
+                        cwd: Some("/home/user/project".to_string()),
+                        command: Some("cargo watch".to_string()),
+                    },
+                ],
+            }],
+        };
+
+        let json = serde_json::to_string(&profile).unwrap();
+        let deserialized: Profile = serde_json::from_str(&json).unwrap();
+        assert_eq!(profile, deserialized);
+
+        // Verify pane fields survived the roundtrip
+        let tab = &deserialized.tabs[0];
+        assert_eq!(tab.panes.len(), 2);
+        assert_eq!(
+            tab.layout.as_deref(),
+            Some("5a4a,204x51,0,0{102x51,0,0,0,101x51,103,0,1}")
+        );
+        assert_eq!(
+            tab.panes[0].cwd.as_deref(),
+            Some("/home/user/project/src")
+        );
+        assert_eq!(tab.panes[0].command.as_deref(), Some("vim ."));
+        assert_eq!(
+            tab.panes[1].cwd.as_deref(),
+            Some("/home/user/project")
+        );
+        assert_eq!(tab.panes[1].command.as_deref(), Some("cargo watch"));
+    }
+
+    #[test]
+    fn test_tab_profile_backward_compat_no_layout_no_panes() {
+        // JSON from before panes/layout were added — missing both fields entirely
+        let json = r##"{
+            "id": "old_profile",
+            "name": "Legacy Profile",
+            "color": "#abcdef",
+            "tabs": [
+                {
+                    "name": "Shell",
+                    "cwd": "/tmp",
+                    "command": "echo hi"
+                }
+            ]
+        }"##;
+
+        let profile: Profile = serde_json::from_str(json).unwrap();
+        assert_eq!(profile.tabs.len(), 1);
+
+        let tab = &profile.tabs[0];
+        assert_eq!(tab.name, "Shell");
+        assert_eq!(tab.cwd, "/tmp");
+        assert_eq!(tab.command.as_deref(), Some("echo hi"));
+        assert!(tab.layout.is_none(), "layout should default to None");
+        assert!(tab.panes.is_empty(), "panes should default to empty vec");
+    }
+
+    #[test]
+    fn test_pane_profile_optional_fields() {
+        // PaneProfile with no cwd, no command
+        let pane = PaneProfile {
+            cwd: None,
+            command: None,
+        };
+        let json = serde_json::to_string(&pane).unwrap();
+        // skip_serializing_if means empty fields are omitted
+        assert_eq!(json, "{}");
+
+        let deserialized: PaneProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, pane);
+    }
+
+    #[test]
+    fn test_tab_profile_empty_panes_not_serialized() {
+        let tab = TabProfile {
+            name: "Shell".to_string(),
+            cwd: "/tmp".to_string(),
+            command: None,
+            layout: None,
+            panes: vec![],
+        };
+        let json = serde_json::to_string(&tab).unwrap();
+        // panes should be omitted when empty (skip_serializing_if = "Vec::is_empty")
+        assert!(
+            !json.contains("panes"),
+            "empty panes should not appear in JSON: {json}"
+        );
+        // layout should be omitted when None
+        assert!(
+            !json.contains("layout"),
+            "None layout should not appear in JSON: {json}"
+        );
     }
 }

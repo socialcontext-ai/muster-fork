@@ -423,6 +423,63 @@ impl TmuxClient {
             .collect()
     }
 
+    /// Split the current pane to create a new pane in the specified window.
+    pub fn split_window(
+        &self,
+        session: &str,
+        window_index: u32,
+        cwd: &str,
+        shell: Option<&str>,
+    ) -> Result<()> {
+        let target = format!("{session}:{window_index}");
+        let mut args = vec!["split-window", "-t", &target, "-c", cwd];
+        if let Some(sh) = shell {
+            args.push(sh);
+        }
+        self.cmd(&args)?;
+        Ok(())
+    }
+
+    /// Apply a tmux layout string to a window.
+    pub fn select_layout(&self, session: &str, window_index: u32, layout: &str) -> Result<()> {
+        let target = format!("{session}:{window_index}");
+        self.cmd(&["select-layout", "-t", &target, layout])?;
+        Ok(())
+    }
+
+    /// Send keys to a specific pane within a window.
+    pub fn send_keys_to_pane(
+        &self,
+        session: &str,
+        window_index: u32,
+        pane_index: u32,
+        keys: &str,
+    ) -> Result<()> {
+        let target = format!("{session}:{window_index}.{pane_index}");
+        self.cmd(&["send-keys", "-t", &target, keys, "Enter"])?;
+        Ok(())
+    }
+
+    /// Capture the layout string for a window.
+    pub fn get_window_layout(&self, session: &str, window_index: u32) -> Result<String> {
+        let target = format!("{session}:{window_index}");
+        let output = self.cmd(&["display-message", "-t", &target, "-p", "-F", "#{window_layout}"])?;
+        Ok(output.trim().to_string())
+    }
+
+    /// List panes in a specific window (not session-wide).
+    pub fn list_window_panes(&self, session: &str, window_index: u32) -> Result<Vec<TmuxPane>> {
+        let target = format!("{session}:{window_index}");
+        let output = self.cmd(&[
+            "list-panes",
+            "-t",
+            &target,
+            "-F",
+            "#{pane_id}\t#{window_index}\t#{pane_index}\t#{pane_pid}\t#{pane_current_command}\t#{pane_current_path}",
+        ])?;
+        Ok(Self::parse_pane_list(&output))
+    }
+
     /// Parse `list-windows -F` output into structured data.
     pub fn parse_window_list(output: &str) -> Vec<TmuxWindow> {
         output
@@ -796,6 +853,109 @@ mod tests {
         let windows = client.list_windows(&session_name).unwrap();
         assert_eq!(windows[0].name, "renamed");
 
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_split_window() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp", None)
+            .expect("create session");
+
+        // Should start with 1 pane
+        let panes_before = client.list_window_panes(&session_name, 0).unwrap();
+        assert_eq!(panes_before.len(), 1);
+
+        // Split to create a second pane
+        client
+            .split_window(&session_name, 0, "/tmp", None)
+            .expect("split window");
+
+        let panes_after = client.list_window_panes(&session_name, 0).unwrap();
+        assert_eq!(
+            panes_after.len(),
+            2,
+            "expected 2 panes after split, got {}",
+            panes_after.len()
+        );
+
+        // Cleanup
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_get_window_layout() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp", None)
+            .expect("create session");
+
+        // Split so layout is non-trivial
+        client
+            .split_window(&session_name, 0, "/tmp", None)
+            .expect("split window");
+
+        let layout = client
+            .get_window_layout(&session_name, 0)
+            .expect("get layout");
+        assert!(
+            !layout.is_empty(),
+            "layout string should be non-empty after split"
+        );
+        // tmux layout strings contain dimension info like "204x51"
+        assert!(
+            layout.contains('x'),
+            "layout string should contain dimension separator 'x': {layout}"
+        );
+
+        // Cleanup
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_select_layout() {
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let session_name = format!("muster_test_{}", uuid::Uuid::new_v4());
+        client
+            .new_session(&session_name, "shell", "/tmp", None)
+            .expect("create session");
+
+        // Create 3 panes (2 splits)
+        client
+            .split_window(&session_name, 0, "/tmp", None)
+            .expect("first split");
+        client
+            .split_window(&session_name, 0, "/tmp", None)
+            .expect("second split");
+
+        let panes = client.list_window_panes(&session_name, 0).unwrap();
+        assert_eq!(panes.len(), 3, "should have 3 panes before layout test");
+
+        // Capture current layout
+        let layout = client
+            .get_window_layout(&session_name, 0)
+            .expect("get layout");
+
+        // Apply the captured layout back — should succeed without error
+        client
+            .select_layout(&session_name, 0, &layout)
+            .expect("select_layout should succeed when re-applying captured layout");
+
+        // Verify we still have 3 panes (layout change doesn't destroy panes)
+        let panes_after = client.list_window_panes(&session_name, 0).unwrap();
+        assert_eq!(
+            panes_after.len(),
+            3,
+            "pane count should be unchanged after select_layout"
+        );
+
+        // Cleanup
         client.kill_session(&session_name).ok();
     }
 }

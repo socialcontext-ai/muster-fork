@@ -17,6 +17,65 @@ pub fn resolve_shell(shell_setting: Option<&str>) -> Option<String> {
     std::env::var("SHELL").ok().filter(|s| !s.is_empty())
 }
 
+/// Set up panes within a window based on the tab profile.
+///
+/// If the tab has panes defined, creates splits and applies the layout.
+/// Otherwise, falls back to single-pane behavior (send tab-level command).
+fn setup_window_panes(
+    client: &TmuxClient,
+    session_name: &str,
+    window_index: u32,
+    tab: &TabProfile,
+    shell: Option<&str>,
+) -> Result<()> {
+    if tab.panes.is_empty() {
+        // Single-pane behavior: send tab-level command
+        if let Some(ref cmd) = tab.command {
+            client.send_keys(session_name, window_index, cmd)?;
+        }
+        return Ok(());
+    }
+
+    // Multi-pane: create splits for panes after the first
+    for pane in tab.panes.iter().skip(1) {
+        let cwd = pane.cwd.as_deref().unwrap_or(&tab.cwd);
+        client.split_window(session_name, window_index, cwd, shell)?;
+    }
+
+    // Apply layout (must happen after all splits are created).
+    // Best-effort: a bad or stale layout string shouldn't prevent session creation.
+    if let Some(ref layout) = tab.layout {
+        if let Err(e) = client.select_layout(session_name, window_index, layout) {
+            tracing::warn!(window_index, %e, "failed to apply saved layout, using default");
+        }
+    }
+
+    // Send commands to each pane
+    for (pane_idx, pane) in tab.panes.iter().enumerate() {
+        let idx = u32::try_from(pane_idx).unwrap_or(0);
+
+        // If pane 0 has a different cwd than the tab, cd into it
+        if pane_idx == 0 {
+            if let Some(ref pane_cwd) = pane.cwd {
+                if pane_cwd != &tab.cwd {
+                    client.send_keys_to_pane(
+                        session_name,
+                        window_index,
+                        idx,
+                        &format!("cd {pane_cwd}"),
+                    )?;
+                }
+            }
+        }
+
+        if let Some(ref cmd) = pane.command {
+            client.send_keys_to_pane(session_name, window_index, idx, cmd)?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Create a tmux session from a profile.
 ///
 /// Steps:
@@ -36,6 +95,8 @@ pub fn create_from_profile(
         name: "Shell".to_string(),
         cwd: "/tmp".to_string(),
         command: None,
+        layout: None,
+        panes: vec![],
     });
 
     // Create the session with the first window
@@ -46,18 +107,14 @@ pub fn create_from_profile(
         client.set_option(&session_name, "default-command", sh)?;
     }
 
-    // Send startup command for first tab if specified
-    if let Some(ref cmd) = first_tab.command {
-        client.send_keys(&session_name, 0, cmd)?;
-    }
+    // Set up first window (panes or single-pane)
+    setup_window_panes(client, &session_name, 0, &first_tab, shell)?;
 
     // Create additional windows
     for (i, tab) in profile.tabs.iter().enumerate().skip(1) {
+        let index = u32::try_from(i).unwrap_or(0);
         client.new_window(&session_name, &tab.name, &tab.cwd, shell)?;
-        if let Some(ref cmd) = tab.command {
-            let index = u32::try_from(i).unwrap_or(0);
-            client.send_keys(&session_name, index, cmd)?;
-        }
+        setup_window_panes(client, &session_name, index, tab, shell)?;
     }
 
     // Set metadata
@@ -136,11 +193,15 @@ mod tests {
                     name: "Shell".to_string(),
                     cwd: "/tmp".to_string(),
                     command: None,
+                    layout: None,
+                    panes: vec![],
                 },
                 TabProfile {
                     name: "Server".to_string(),
                     cwd: "/tmp".to_string(),
                     command: Some("echo hello".to_string()),
+                    layout: None,
+                    panes: vec![],
                 },
             ],
         }
@@ -286,6 +347,53 @@ mod tests {
 
     #[test]
     #[ignore]
+    fn test_create_session_with_pane_layout() {
+        use crate::config::profile::PaneProfile;
+
+        let client = TmuxClient::new().expect("tmux must be installed");
+        let profile = Profile {
+            id: format!("test_{}", uuid::Uuid::new_v4()),
+            name: "Pane Layout Test".to_string(),
+            color: "#00ff00".to_string(),
+            tabs: vec![TabProfile {
+                name: "Dev".to_string(),
+                cwd: "/tmp".to_string(),
+                command: None,
+                layout: None, // no layout string — just split
+                panes: vec![
+                    PaneProfile {
+                        cwd: Some("/tmp".to_string()),
+                        command: None,
+                    },
+                    PaneProfile {
+                        cwd: Some("/var".to_string()),
+                        command: None,
+                    },
+                ],
+            }],
+        };
+        let session_name = format!("{SESSION_PREFIX}{}", profile.id);
+
+        let info = create_from_profile(&client, &profile, None).expect("create session");
+        assert_eq!(info.display_name, "Pane Layout Test");
+        assert_eq!(info.window_count, 1);
+
+        // Verify the window has 2 panes
+        let panes = client.list_window_panes(&session_name, 0).unwrap();
+        assert_eq!(
+            panes.len(),
+            2,
+            "expected 2 panes, got {}: {:?}",
+            panes.len(),
+            panes
+        );
+
+        // Cleanup
+        client.kill_session(&session_name).ok();
+    }
+
+    #[test]
+    #[ignore]
     fn test_pane_died_hook_fires_on_process_exit() {
         let client = TmuxClient::new().expect("tmux must be installed");
         let session_name = format!("{SESSION_PREFIX}hookfire_{}", uuid::Uuid::new_v4());
@@ -298,11 +406,10 @@ mod tests {
             .new_session(&anchor, "anchor", "/tmp", None)
             .expect("create anchor session");
 
-        // Create a session running "sleep 1" — exits on its own after 1 second.
-        // This avoids relying on send-keys "exit" which can behave differently
-        // across shell types in a detached session.
+        // Use /bin/sh directly to avoid default-shell startup overhead (fish
+        // config loading can push total time well past 2s).
         client
-            .new_session(&session_name, "test", "/tmp", Some("sleep 1"))
+            .new_session(&session_name, "test", "/tmp", Some("/bin/sh -c 'sleep 1'"))
             .expect("create session");
 
         // Set remain-on-exit and hook immediately (sleep is still running)
@@ -314,8 +421,16 @@ mod tests {
             .cmd(&["set-hook", "-t", &session_name, "pane-died", &hook_cmd])
             .unwrap();
 
-        // Wait for sleep to exit (1s) + time for hook to fire
-        std::thread::sleep(std::time::Duration::from_millis(2500));
+        // Poll for the marker file instead of a fixed sleep — more robust
+        // across different systems and load levels.
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_secs(8);
+        while std::time::Instant::now() < deadline {
+            if std::path::Path::new(&marker).exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
 
         assert!(
             std::path::Path::new(&marker).exists(),
