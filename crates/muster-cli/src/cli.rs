@@ -96,6 +96,12 @@ pub enum Command {
         profile: Option<String>,
     },
 
+    /// Show resource usage (CPU, memory, GPU) for session processes
+    Top {
+        /// Profile name or ID (shows all sessions if omitted)
+        profile: Option<String>,
+    },
+
     /// Show all sessions with details
     Status,
 

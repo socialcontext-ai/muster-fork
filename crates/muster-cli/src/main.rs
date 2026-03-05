@@ -562,6 +562,113 @@ fn collect_pids(tree: &[ProcessTree]) -> Vec<u32> {
     pids
 }
 
+// ---- Resource usage support for `muster top` ----
+
+struct ResourceEntry {
+    pid: u32,
+    ppid: u32,
+    cpu: f64,
+    rss_kb: u64,
+    #[allow(dead_code)]
+    command: String,
+}
+
+/// Parse `ps -eo pid,ppid,%cpu,rss,comm` output into resource entries.
+fn parse_resource_table(output: &str) -> Vec<ResourceEntry> {
+    output
+        .lines()
+        .skip(1) // skip header
+        .filter_map(|line| {
+            let line = line.trim();
+            let mut tokens = line.split_whitespace();
+            let pid: u32 = tokens.next()?.parse().ok()?;
+            let ppid: u32 = tokens.next()?.parse().ok()?;
+            let cpu: f64 = tokens.next()?.parse().ok()?;
+            let rss_kb: u64 = tokens.next()?.parse().ok()?;
+            let command: String = tokens.collect::<Vec<_>>().join(" ");
+            if command.is_empty() {
+                return None;
+            }
+            Some(ResourceEntry { pid, ppid, cpu, rss_kb, command })
+        })
+        .collect()
+}
+
+/// Run `ps -eo pid,ppid,%cpu,rss,comm` and parse the full resource table.
+fn build_resource_table() -> Vec<ResourceEntry> {
+    let output = match std::process::Command::new("ps")
+        .args(["-eo", "pid,ppid,%cpu,rss,comm"])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => return Vec::new(),
+    };
+    parse_resource_table(&output)
+}
+
+/// Collect resource usage for a PID and all its descendants.
+fn collect_tree_resources(
+    root_pid: u32,
+    table: &[ResourceEntry],
+) -> (f64, u64) {
+    let mut cpu = 0.0;
+    let mut rss = 0u64;
+    // Find direct entry for root
+    if let Some(entry) = table.iter().find(|e| e.pid == root_pid) {
+        cpu += entry.cpu;
+        rss += entry.rss_kb;
+    }
+    // Recurse into children
+    for child in table.iter().filter(|e| e.ppid == root_pid) {
+        let (c, r) = collect_tree_resources(child.pid, table);
+        cpu += c;
+        rss += r;
+    }
+    (cpu, rss)
+}
+
+struct GpuProcessInfo {
+    pid: u32,
+    gpu_memory_mb: u64,
+}
+
+/// Try to query per-process GPU usage via nvidia-smi.
+/// Returns None if nvidia-smi is not available, Some(vec) otherwise.
+fn build_gpu_table() -> Option<Vec<GpuProcessInfo>> {
+    let output = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-compute-apps=pid,used_memory",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let entries = text
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split(',').map(str::trim);
+            let pid: u32 = parts.next()?.parse().ok()?;
+            let mem: u64 = parts.next()?.parse().ok()?;
+            Some(GpuProcessInfo { pid, gpu_memory_mb: mem })
+        })
+        .collect();
+    Some(entries)
+}
+
+/// Format bytes from KB to a human-readable string.
+fn format_memory(kb: u64) -> String {
+    if kb >= 1_048_576 {
+        format!("{:.1} GB", kb as f64 / 1_048_576.0)
+    } else if kb >= 1024 {
+        format!("{:.1} MB", kb as f64 / 1024.0)
+    } else {
+        format!("{kb} KB")
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -1026,6 +1133,232 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 mp.port, mp.command, mp.window_index, mp.window_name,
                             );
                         }
+                    }
+                }
+            }
+        }
+
+        Command::Top { profile } => {
+            let mut sessions = m.list_sessions()?;
+
+            if let Some(ref filter) = profile {
+                sessions.retain(|s| {
+                    s.display_name == *filter
+                        || s.profile_id.as_deref() == Some(filter)
+                        || s.session_name == *filter
+                });
+                if sessions.is_empty() {
+                    eprintln!("No session found for: {filter}");
+                    process::exit(1);
+                }
+            }
+
+            if sessions.is_empty() {
+                if cli.json {
+                    println!("[]");
+                } else {
+                    println!("No active sessions.");
+                }
+            } else {
+                let res_table = build_resource_table();
+                let gpu_table = build_gpu_table();
+                let has_gpu = gpu_table.is_some();
+                let gpu_entries = gpu_table.unwrap_or_default();
+
+                // Build a PID -> GPU memory lookup
+                let gpu_lookup: std::collections::HashMap<u32, u64> = gpu_entries
+                    .iter()
+                    .map(|g| (g.pid, g.gpu_memory_mb))
+                    .collect();
+
+                if cli.json {
+                    let mut json_sessions = Vec::new();
+                    for s in &sessions {
+                        let panes = m.client().list_panes(&s.session_name).unwrap_or_default();
+                        let windows = m.client().list_windows(&s.session_name).unwrap_or_default();
+
+                        let mut session_cpu = 0.0;
+                        let mut session_rss = 0u64;
+                        let mut session_gpu = 0u64;
+
+                        let mut pane_map: std::collections::BTreeMap<u32, Vec<&muster::TmuxPane>> =
+                            std::collections::BTreeMap::new();
+                        for pane in &panes {
+                            pane_map.entry(pane.window_index).or_default().push(pane);
+                        }
+
+                        let mut json_windows = Vec::new();
+                        for w in &windows {
+                            let mut win_cpu = 0.0;
+                            let mut win_rss = 0u64;
+                            let mut win_gpu = 0u64;
+
+                            if let Some(w_panes) = pane_map.get(&w.index) {
+                                for pane in w_panes {
+                                    let (cpu, rss) = collect_tree_resources(pane.pid, &res_table);
+                                    win_cpu += cpu;
+                                    win_rss += rss;
+                                    // Collect GPU for all descendant PIDs
+                                    let proc_table = build_tree(pane.pid, &build_process_table());
+                                    let mut all_pids = vec![pane.pid];
+                                    all_pids.extend(collect_pids(&proc_table));
+                                    for pid in &all_pids {
+                                        if let Some(&mem) = gpu_lookup.get(pid) {
+                                            win_gpu += mem;
+                                        }
+                                    }
+                                }
+                            }
+
+                            session_cpu += win_cpu;
+                            session_rss += win_rss;
+                            session_gpu += win_gpu;
+
+                            let mut win_json = serde_json::json!({
+                                "index": w.index,
+                                "name": w.name,
+                                "cpu_percent": (win_cpu * 10.0).round() / 10.0,
+                                "rss_kb": win_rss,
+                            });
+                            if has_gpu {
+                                win_json["gpu_memory_mb"] = serde_json::json!(win_gpu);
+                            }
+                            json_windows.push(win_json);
+                        }
+
+                        let mut sess_json = serde_json::json!({
+                            "session": s.session_name,
+                            "display_name": s.display_name,
+                            "color": s.color,
+                            "cpu_percent": (session_cpu * 10.0).round() / 10.0,
+                            "rss_kb": session_rss,
+                            "windows": json_windows,
+                        });
+                        if has_gpu {
+                            sess_json["gpu_memory_mb"] = serde_json::json!(session_gpu);
+                        }
+                        json_sessions.push(sess_json);
+                    }
+                    println!("{}", serde_json::to_string_pretty(&json_sessions)?);
+                } else {
+                    let mut total_cpu = 0.0;
+                    let mut total_rss = 0u64;
+                    let mut total_gpu = 0u64;
+
+                    for s in &sessions {
+                        let panes = m.client().list_panes(&s.session_name).unwrap_or_default();
+                        let windows = m.client().list_windows(&s.session_name).unwrap_or_default();
+
+                        let mut session_cpu = 0.0;
+                        let mut session_rss = 0u64;
+                        let mut session_gpu = 0u64;
+
+                        let mut pane_map: std::collections::BTreeMap<u32, Vec<&muster::TmuxPane>> =
+                            std::collections::BTreeMap::new();
+                        for pane in &panes {
+                            pane_map.entry(pane.window_index).or_default().push(pane);
+                        }
+
+                        // Collect per-window stats
+                        struct WindowStats {
+                            index: u32,
+                            name: String,
+                            cpu: f64,
+                            rss: u64,
+                            gpu: u64,
+                        }
+
+                        let proc_table_for_gpu = build_process_table();
+                        let mut window_stats = Vec::new();
+                        for w in &windows {
+                            let mut win_cpu = 0.0;
+                            let mut win_rss = 0u64;
+                            let mut win_gpu = 0u64;
+
+                            if let Some(w_panes) = pane_map.get(&w.index) {
+                                for pane in w_panes {
+                                    let (cpu, rss) = collect_tree_resources(pane.pid, &res_table);
+                                    win_cpu += cpu;
+                                    win_rss += rss;
+                                    let tree = build_tree(pane.pid, &proc_table_for_gpu);
+                                    let mut all_pids = vec![pane.pid];
+                                    all_pids.extend(collect_pids(&tree));
+                                    for pid in &all_pids {
+                                        if let Some(&mem) = gpu_lookup.get(pid) {
+                                            win_gpu += mem;
+                                        }
+                                    }
+                                }
+                            }
+
+                            session_cpu += win_cpu;
+                            session_rss += win_rss;
+                            session_gpu += win_gpu;
+
+                            window_stats.push(WindowStats {
+                                index: w.index,
+                                name: w.name.clone(),
+                                cpu: win_cpu,
+                                rss: win_rss,
+                                gpu: win_gpu,
+                            });
+                        }
+
+                        total_cpu += session_cpu;
+                        total_rss += session_rss;
+                        total_gpu += session_gpu;
+
+                        // Session header
+                        let gpu_str = if has_gpu {
+                            format!("  GPU: {} MB", session_gpu)
+                        } else {
+                            String::new()
+                        };
+                        println!(
+                            "{} {} ({})  CPU: {:.1}%  Mem: {}{}",
+                            color_dot(&s.color),
+                            s.display_name,
+                            s.session_name,
+                            session_cpu,
+                            format_memory(session_rss),
+                            gpu_str,
+                        );
+
+                        // Per-window breakdown
+                        for ws in &window_stats {
+                            // Skip windows with negligible usage
+                            if ws.cpu < 0.1 && ws.rss < 1024 && ws.gpu == 0 {
+                                continue;
+                            }
+                            let win_gpu_str = if has_gpu && ws.gpu > 0 {
+                                format!("  GPU: {} MB", ws.gpu)
+                            } else {
+                                String::new()
+                            };
+                            println!(
+                                "  [{}] {:<20} CPU: {:>5.1}%  Mem: {:>10}{}",
+                                ws.index,
+                                ws.name,
+                                ws.cpu,
+                                format_memory(ws.rss),
+                                win_gpu_str,
+                            );
+                        }
+                    }
+
+                    // Summary line if multiple sessions
+                    if sessions.len() > 1 {
+                        let gpu_str = if has_gpu {
+                            format!("  GPU: {} MB", total_gpu)
+                        } else {
+                            String::new()
+                        };
+                        println!(
+                            "\nTotal: CPU: {:.1}%  Mem: {}{}",
+                            total_cpu,
+                            format_memory(total_rss),
+                            gpu_str,
+                        );
                     }
                 }
             }
