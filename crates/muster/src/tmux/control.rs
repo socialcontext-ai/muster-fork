@@ -225,6 +225,7 @@ impl ControlMode {
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
+            .env_remove("CLAUDECODE")
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| Error::TmuxError(format!("failed to spawn control mode: {e}")))?;

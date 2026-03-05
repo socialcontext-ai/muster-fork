@@ -5,6 +5,23 @@ use crate::error::Result;
 use crate::tmux::client::{quote_tmux, quote_tmux_cmd, TmuxClient, SESSION_PREFIX};
 use crate::tmux::types::{SessionInfo, TmuxWindow};
 
+/// Expand a leading `~` to the user's home directory.
+///
+/// tmux does not properly expand `~/path` in `-c` arguments — it resolves
+/// to just `$HOME` instead of `$HOME/path`. We expand it ourselves.
+fn expand_tilde(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return format!("{}/{rest}", home.display());
+        }
+    } else if path == "~" {
+        if let Some(home) = dirs::home_dir() {
+            return home.to_string_lossy().into_owned();
+        }
+    }
+    path.to_string()
+}
+
 /// Resolve the shell to use for new tmux panes.
 ///
 /// Priority: explicit shell setting → `$SHELL` env var → None (tmux default).
@@ -44,9 +61,10 @@ fn build_window_pane_commands(
 
     // Multi-pane: create splits for panes after the first
     for pane in tab.panes.iter().skip(1) {
-        let cwd = pane.cwd.as_deref().unwrap_or(&tab.cwd);
+        let raw_cwd = pane.cwd.as_deref().unwrap_or(&tab.cwd);
+        let cwd = expand_tilde(raw_cwd);
         let target = format!("{session_name}:{window_index}");
-        let mut cmd = format!("split-window -t {} -c {}", target, quote_tmux(cwd));
+        let mut cmd = format!("split-window -t {} -c {}", target, quote_tmux(&cwd));
         if let Some(sh) = shell {
             cmd.push(' ');
             cmd.push_str(&quote_tmux(sh));
@@ -72,10 +90,11 @@ fn build_window_pane_commands(
         if pane_idx == 0 {
             if let Some(ref pane_cwd) = pane.cwd {
                 if pane_cwd != &tab.cwd {
+                    let resolved = expand_tilde(pane_cwd);
                     commands.push(format!(
                         "send-keys -t {} {} Enter",
                         target,
-                        quote_tmux(&format!("cd {pane_cwd}")),
+                        quote_tmux(&format!("cd {resolved}")),
                     ));
                 }
             }
@@ -138,11 +157,12 @@ fn build_launch_commands(
     // Create additional windows and set up their panes
     for (i, tab) in profile.tabs.iter().enumerate().skip(1) {
         let index = u32::try_from(i).unwrap_or(0);
+        let tab_cwd = expand_tilde(&tab.cwd);
         let mut new_win_cmd = format!(
             "new-window -t {} -n {} -c {}",
             session_name,
             quote_tmux(&tab.name),
-            quote_tmux(&tab.cwd),
+            quote_tmux(&tab_cwd),
         );
         if let Some(sh) = shell {
             new_win_cmd.push(' ');
@@ -226,8 +246,24 @@ pub fn create_from_profile(
         panes: vec![],
     });
 
+    // Strip Claude Code env vars from the tmux server's global environment
+    // *before* creating the session, so the first window's pane doesn't inherit
+    // them. If no tmux server is running yet, these fail silently (the
+    // env_remove on the Command spawn handles that case).
+    for var in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"] {
+        let _ = client.cmd(&["set-environment", "-g", "-u", var]);
+    }
+
     // Create the session with the first window (must be standalone — starts the server)
-    client.new_session(&session_name, &first_tab.name, &first_tab.cwd, shell)?;
+    let first_cwd = expand_tilde(&first_tab.cwd);
+    client.new_session(&session_name, &first_tab.name, &first_cwd, shell)?;
+
+    // Also unset at session level (in case server was just started by new_session
+    // and inherited the vars from the process environment).
+    for var in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"] {
+        let _ = client.cmd(&["set-environment", "-g", "-u", var]);
+        let _ = client.cmd(&["set-environment", "-t", &session_name, "-u", var]);
+    }
 
     // Build and execute all remaining commands as a batch
     let commands = build_launch_commands(&session_name, profile, shell)?;

@@ -451,6 +451,7 @@ fn exec_tmux_attach(session: &str, settings: &muster::Settings) -> ! {
 
     let err = std::process::Command::new(tmux_path())
         .args(["attach-session", "-t", session])
+        .env_remove("CLAUDECODE")
         .exec();
     // exec() only returns on error
     eprintln!("Failed to exec tmux: {err}");

@@ -53,6 +53,7 @@ impl TmuxClient {
     pub fn cmd(&self, args: &[&str]) -> Result<String> {
         let output = Command::new(&self.tmux_path)
             .args(args)
+            .env_remove("CLAUDECODE")
             .output()
             .map_err(|e| Error::TmuxError(format!("failed to spawn tmux: {e}")))?;
 
