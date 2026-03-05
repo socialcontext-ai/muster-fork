@@ -1,3 +1,9 @@
+//! Profile storage: CRUD operations for session templates.
+//!
+//! A [`Profile`] defines a named tmux session layout — tabs, working directories,
+//! startup commands, and pane splits. Profiles are persisted as JSON in the
+//! config directory.
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,30 +50,44 @@ pub fn slugify(name: &str) -> String {
     result
 }
 
+/// A session template defining tabs, colors, and startup behavior.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Profile {
+    /// URL-safe slug identifier (e.g., `"my-project"`).
     pub id: String,
+    /// Human-readable display name (e.g., `"My Project"`).
     pub name: String,
+    /// Theme color as `#RRGGBB` hex.
     pub color: String,
+    /// Ordered list of tabs to create on launch.
     pub tabs: Vec<TabProfile>,
 }
 
+/// A tab (tmux window) within a profile.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TabProfile {
+    /// Window name shown in the tmux status bar.
     pub name: String,
+    /// Working directory for the window's initial pane.
     pub cwd: String,
+    /// Optional startup command sent via `send-keys`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    /// Tmux layout string for multi-pane arrangements.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<String>,
+    /// Additional panes beyond the first (created via `split-window`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub panes: Vec<PaneProfile>,
 }
 
+/// A pane within a tab (created via `split-window`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PaneProfile {
+    /// Working directory override (falls back to the tab's cwd).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
+    /// Optional startup command sent via `send-keys`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
 }
@@ -83,6 +103,7 @@ pub struct ProfileStore {
 }
 
 impl ProfileStore {
+    /// Create a new store, ensuring the config directory exists.
     pub fn new(config_dir: &Path) -> Result<Self> {
         fs::create_dir_all(config_dir).map_err(|_| Error::ConfigDir(config_dir.to_path_buf()))?;
         Ok(Self {
@@ -113,6 +134,7 @@ impl ProfileStore {
         Ok(())
     }
 
+    /// Create a new profile. Errors if a profile with the same ID exists.
     pub fn create(&self, profile: Profile) -> Result<Profile> {
         let mut file = self.load()?;
         if file.profiles.contains_key(&profile.id) {
@@ -123,6 +145,7 @@ impl ProfileStore {
         Ok(profile)
     }
 
+    /// List all profiles, sorted by name.
     pub fn list(&self) -> Result<Vec<Profile>> {
         let file = self.load()?;
         let mut profiles: Vec<Profile> = file.profiles.into_values().collect();
@@ -130,11 +153,13 @@ impl ProfileStore {
         Ok(profiles)
     }
 
+    /// Get a profile by ID. Returns `None` if not found.
     pub fn get(&self, id: &str) -> Result<Option<Profile>> {
         let file = self.load()?;
         Ok(file.profiles.get(id).cloned())
     }
 
+    /// Update an existing profile. Errors if the profile doesn't exist.
     pub fn update(&self, profile: Profile) -> Result<Profile> {
         let mut file = self.load()?;
         if !file.profiles.contains_key(&profile.id) {
@@ -145,6 +170,7 @@ impl ProfileStore {
         Ok(profile)
     }
 
+    /// Rename a profile: remove the old ID entry and insert with the new ID.
     pub fn rename(&self, old_id: &str, profile: Profile) -> Result<Profile> {
         let mut file = self.load()?;
         if file.profiles.remove(old_id).is_none() {
@@ -155,6 +181,7 @@ impl ProfileStore {
         Ok(profile)
     }
 
+    /// Delete a profile by ID. Errors if the profile doesn't exist.
     pub fn delete(&self, id: &str) -> Result<()> {
         let mut file = self.load()?;
         if file.profiles.remove(id).is_none() {

@@ -1,3 +1,5 @@
+//! Session lifecycle: creation from profiles, destruction, and tmux hook setup.
+
 pub mod theme;
 
 use crate::config::profile::{Profile, TabProfile};

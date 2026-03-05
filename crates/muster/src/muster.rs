@@ -1,3 +1,5 @@
+//! Top-level API facade tying together tmux, profiles, settings, and theming.
+
 use std::path::{Path, PathBuf};
 
 use tokio::sync::broadcast;
@@ -84,36 +86,44 @@ impl Muster {
 
     // --- Profiles ---
 
+    /// List all saved profiles, sorted by name.
     pub fn list_profiles(&self) -> Result<Vec<Profile>> {
         self.profiles.list()
     }
 
+    /// Get a profile by ID.
     pub fn get_profile(&self, id: &str) -> Result<Option<Profile>> {
         self.profiles.get(id)
     }
 
+    /// Create a new profile.
     pub fn save_profile(&self, profile: Profile) -> Result<Profile> {
         self.profiles.create(profile)
     }
 
+    /// Update an existing profile.
     pub fn update_profile(&self, profile: Profile) -> Result<Profile> {
         self.profiles.update(profile)
     }
 
+    /// Rename a profile (changes its ID).
     pub fn rename_profile(&self, old_id: &str, profile: Profile) -> Result<Profile> {
         self.profiles.rename(old_id, profile)
     }
 
+    /// Delete a profile by ID.
     pub fn delete_profile(&self, id: &str) -> Result<()> {
         self.profiles.delete(id)
     }
 
     // --- Sessions ---
 
+    /// List all muster-managed tmux sessions with their metadata.
     pub fn list_sessions(&self) -> Result<Vec<SessionInfo>> {
         self.client.list_sessions_with_metadata()
     }
 
+    /// Launch a session from a profile. Returns existing session info if already running.
     pub fn launch(&self, profile_id: &str) -> Result<SessionInfo> {
         let profile = self
             .profiles
@@ -158,12 +168,14 @@ impl Muster {
         Err(Error::SessionNotFound(input.to_string()))
     }
 
+    /// Destroy (kill) a tmux session.
     pub fn destroy(&self, session_name: &str) -> Result<()> {
         session::destroy(&self.client, session_name)
     }
 
     // --- Windows ---
 
+    /// Add a new window (tab) to a running session.
     pub fn add_window(
         &self,
         session: &str,
@@ -184,14 +196,17 @@ impl Muster {
         Ok(())
     }
 
+    /// Close (kill) a window in a session.
     pub fn close_window(&self, session: &str, window_index: u32) -> Result<()> {
         self.client.kill_window(session, window_index)
     }
 
+    /// Switch the active window in a session.
     pub fn switch_window(&self, session: &str, window_index: u32) -> Result<()> {
         self.client.select_window(session, window_index)
     }
 
+    /// Rename a window in a session.
     pub fn rename_window(&self, session: &str, window_index: u32, name: &str) -> Result<()> {
         self.client.rename_window(session, window_index, name)
     }
@@ -477,6 +492,7 @@ impl Muster {
 
     // --- Theme ---
 
+    /// Change a session's theme color (accepts hex or named colors).
     pub fn set_color(&self, session: &str, color: &str) -> Result<()> {
         // Get display name for theme application
         let display_name = self
@@ -500,20 +516,24 @@ impl Muster {
 
     // --- Events ---
 
+    /// Subscribe to tmux control mode events.
     pub fn subscribe(&self) -> broadcast::Receiver<MusterEvent> {
         self.tx.subscribe()
     }
 
     // --- Accessors ---
 
+    /// Get the config directory path.
     pub fn config_dir(&self) -> &Path {
         &self.config_dir
     }
 
+    /// Get a reference to the underlying tmux client.
     pub fn client(&self) -> &TmuxClient {
         &self.client
     }
 
+    /// Load and return the current settings.
     pub fn settings(&self) -> Result<Settings> {
         self.settings.load()
     }

@@ -1,6 +1,6 @@
 //! muster-notify — Native macOS notifications with click-to-source navigation.
 //!
-//! Usage: muster-notify <title> <body> [--session S] [--window W] [--terminal T] [--timeout N]
+//! Usage: `muster-notify <title> <body> [--session S] [--window W] [--terminal T] [--timeout N]`
 //!
 //! Sends a UNUserNotificationCenter notification with a "Go to source" action.
 //! On click: tmux select-window → open terminal attached to the session.

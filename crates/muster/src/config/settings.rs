@@ -1,3 +1,5 @@
+//! Global settings: tmux path, shell, and terminal emulator preferences.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -5,8 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
+/// Global configuration for the muster runtime.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Settings {
+    /// Explicit path to the tmux binary. Discovered via PATH if not set.
     #[serde(default)]
     pub tmux_path: Option<String>,
     /// Shell to use for new tmux panes. Defaults to `$SHELL`.
@@ -24,6 +28,7 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
+    /// Create a new store, ensuring the config directory exists.
     pub fn new(config_dir: &Path) -> Result<Self> {
         fs::create_dir_all(config_dir).map_err(|_| Error::ConfigDir(config_dir.to_path_buf()))?;
         Ok(Self {
@@ -35,6 +40,7 @@ impl SettingsStore {
         self.config_dir.join("settings.json")
     }
 
+    /// Load settings from disk, returning defaults if the file doesn't exist.
     pub fn load(&self) -> Result<Settings> {
         let path = self.settings_path();
         if !path.exists() {
@@ -45,6 +51,7 @@ impl SettingsStore {
         Ok(settings)
     }
 
+    /// Persist settings to disk (atomic write via temp file + rename).
     pub fn save(&self, settings: &Settings) -> Result<()> {
         let path = self.settings_path();
         let tmp_path = path.with_extension("json.tmp");

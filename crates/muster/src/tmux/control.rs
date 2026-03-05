@@ -1,3 +1,6 @@
+//! Tmux control mode: attach to a session via `tmux -C` and receive
+//! structured event notifications (window add/close/rename, layout changes, etc.).
+
 use std::path::PathBuf;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};

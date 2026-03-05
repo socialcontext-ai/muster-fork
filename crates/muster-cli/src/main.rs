@@ -1,3 +1,5 @@
+//! CLI entry point for muster: terminal session group management built on tmux.
+
 use std::io::{IsTerminal, Write as _};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -54,7 +56,7 @@ enum Command {
     New {
         /// Display name
         name: String,
-        /// Tab definition (name:cwd[:command]), repeatable
+        /// Tab definition (`name:cwd[:command]`), repeatable
         #[arg(long)]
         tab: Vec<String>,
         /// Color (hex)
@@ -160,7 +162,7 @@ enum ProfileAction {
     Save {
         /// Profile name
         name: String,
-        /// Tab definition (name:cwd[:command]), repeatable
+        /// Tab definition (`name:cwd[:command]`), repeatable
         #[arg(long)]
         tab: Vec<String>,
         /// Color (hex)

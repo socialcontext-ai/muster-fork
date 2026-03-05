@@ -1,3 +1,5 @@
+//! Data types representing tmux objects: sessions, windows, and panes.
+
 /// A tmux session as returned by `list-sessions`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TmuxSession {

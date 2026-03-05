@@ -136,8 +136,8 @@ let profile = Profile {
     name: "My Project".into(),
     color: "#f97316".into(),
     tabs: vec![
-        TabProfile { name: "Shell".into(), cwd: "/home/user/project".into(), command: None },
-        TabProfile { name: "Server".into(), cwd: "/home/user/project".into(), command: Some("npm run dev".into()) },
+        TabProfile { name: "Shell".into(), cwd: "/home/user/project".into(), command: None, layout: None, panes: vec![] },
+        TabProfile { name: "Server".into(), cwd: "/home/user/project".into(), command: Some("npm run dev".into()), layout: None, panes: vec![] },
     ],
 };
 m.save_profile(profile.clone())?;
@@ -203,8 +203,6 @@ These are parsed into `MusterEvent` variants and distributed via `tokio::broadca
 
 `shell` overrides the default shell for new tmux panes. If omitted, muster uses `$SHELL`. Set this if your `$SHELL` differs from the shell you actually use (common on macOS where `$SHELL` defaults to `/bin/zsh`). `tmux_path` overrides tmux discovery from `$PATH`.
 
-## Notifications
-
 ## Peek
 
 Check on a session's terminal output without attaching:
@@ -253,10 +251,21 @@ cargo test -- --ignored             # integration tests
 
 Integration tests create sessions with unique names and clean up after themselves. They do not interfere with your personal tmux sessions.
 
+## Documentation
+
+Generate and browse API docs locally:
+
+```bash
+cargo doc --no-deps --open
+```
+
+All public types, functions, and modules have rustdoc comments. The library crate (`muster`) is the primary reference — it documents the tmux interaction layer, profile/settings management, session lifecycle, and theming system.
+
 ## Development
 
 ```bash
 cargo t              # alias for cargo nextest run
 cargo clippy         # lint
 cargo fmt --check    # format check
+cargo doc --no-deps  # build docs (check for warnings)
 ```

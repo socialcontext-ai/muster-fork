@@ -1,3 +1,5 @@
+//! Error types for the muster library.
+
 use std::path::PathBuf;
 
 /// Errors produced by the muster library.
@@ -37,4 +39,5 @@ pub enum Error {
     NotMusterSession,
 }
 
+/// Convenience alias for `std::result::Result` with [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;

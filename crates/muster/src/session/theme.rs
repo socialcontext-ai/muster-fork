@@ -1,3 +1,6 @@
+//! Tmux session theming: color-coded status bars, pinned/unpinned window
+//! styling, and hook installation for live theme propagation.
+
 use crate::error::{Error, Result};
 use crate::tmux::client::TmuxClient;
 

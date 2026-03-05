@@ -1,3 +1,5 @@
+//! Tmux interaction layer: command execution, control mode streaming, and data types.
+
 pub mod client;
 pub mod control;
 pub mod types;

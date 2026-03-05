@@ -1,3 +1,5 @@
+//! Tmux command execution: wraps the tmux binary for session, window, and pane management.
+
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
