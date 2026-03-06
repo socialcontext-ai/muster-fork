@@ -1554,6 +1554,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::Notifications { action } => match action {
             NotificationAction::Setup => setup_notifications()?,
             NotificationAction::Remove => uninstall_notifications()?,
+            NotificationAction::Test => {
+                send_notification(
+                    "Muster Test",
+                    "Notifications are working.",
+                    "",
+                    "",
+                    &m.settings()?
+                        .terminal
+                        .unwrap_or_else(|| "ghostty".to_string()),
+                );
+                println!("Test notification sent.");
+            }
         },
 
         Command::Profile { action } => match action {

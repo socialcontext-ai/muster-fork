@@ -241,4 +241,6 @@ pub enum NotificationAction {
     Setup,
     /// Remove macOS notification app bundle
     Remove,
+    /// Send a test notification to verify the notification system works
+    Test,
 }
