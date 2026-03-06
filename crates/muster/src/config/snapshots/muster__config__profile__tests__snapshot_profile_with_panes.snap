@@ -1,0 +1,26 @@
+---
+source: crates/muster/src/config/profile.rs
+expression: profile
+---
+{
+  "id": "pane-layout",
+  "name": "Pane Layout",
+  "color": "#00ff00",
+  "tabs": [
+    {
+      "name": "Dev",
+      "cwd": "/home/user/project",
+      "layout": "5a4a,204x51,0,0{102x51,0,0,0,101x51,103,0,1}",
+      "panes": [
+        {
+          "cwd": "/home/user/project/src",
+          "command": "vim ."
+        },
+        {
+          "cwd": "/home/user/project",
+          "command": "cargo watch"
+        }
+      ]
+    }
+  ]
+}

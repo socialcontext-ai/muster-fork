@@ -1,0 +1,55 @@
+---
+source: crates/muster/src/session/theme.rs
+expression: commands
+---
+[
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "status-style",
+    "bg=#f97316,fg=#000000"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "status-left",
+    "#[bg=#532607,fg=#ffffff,bold] PKM Project #[default]"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "status-position",
+    "top"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "mouse",
+    "on"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "window-status-format",
+    "#[bg=#f97316,fg=#000000]  #I: #W #{?#{@muster_layout_stale},#[fg=#c4a000]● ,}"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "window-status-current-format",
+    "#[fg=#f97316,bg=#000000,bold]  #I: #W #{?#{@muster_layout_stale},#[fg=#c4a000]● ,}#[default]"
+  ],
+  [
+    "set-option",
+    "-t",
+    "muster_test",
+    "window-status-separator",
+    ""
+  ]
+]

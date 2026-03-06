@@ -22,3 +22,4 @@ tempfile = { workspace = true }
 [dev-dependencies]
 rstest = { workspace = true }
 tokio-test = { workspace = true }
+insta = { workspace = true }

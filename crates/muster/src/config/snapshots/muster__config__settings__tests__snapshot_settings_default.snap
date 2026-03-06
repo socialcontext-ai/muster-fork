@@ -1,0 +1,9 @@
+---
+source: crates/muster/src/config/settings.rs
+expression: "Settings::default()"
+---
+{
+  "tmux_path": null,
+  "shell": null,
+  "terminal": null
+}

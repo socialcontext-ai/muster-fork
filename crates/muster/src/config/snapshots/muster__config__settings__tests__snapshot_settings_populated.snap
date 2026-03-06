@@ -1,0 +1,9 @@
+---
+source: crates/muster/src/config/settings.rs
+expression: settings
+---
+{
+  "tmux_path": "/opt/homebrew/bin/tmux",
+  "shell": "/bin/zsh",
+  "terminal": "ghostty"
+}

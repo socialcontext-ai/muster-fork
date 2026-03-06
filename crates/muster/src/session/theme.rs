@@ -642,6 +642,12 @@ mod tests {
         assert_eq!(commands[6][3], "window-status-separator");
     }
 
+    #[test]
+    fn test_snapshot_theme_commands() {
+        let commands = build_theme_commands("muster_test", "#f97316", "PKM Project").unwrap();
+        insta::assert_json_snapshot!(commands);
+    }
+
     fn ensure_anchor() {
         let Ok(client) = TmuxClient::new() else {
             return;

@@ -109,4 +109,19 @@ mod tests {
         assert_eq!(settings.tmux_path.as_deref(), Some("/usr/bin/tmux"));
         assert!(settings.shell.is_none());
     }
+
+    #[test]
+    fn test_snapshot_settings_default() {
+        insta::assert_json_snapshot!(Settings::default());
+    }
+
+    #[test]
+    fn test_snapshot_settings_populated() {
+        let settings = Settings {
+            tmux_path: Some("/opt/homebrew/bin/tmux".to_string()),
+            shell: Some("/bin/zsh".to_string()),
+            terminal: Some("ghostty".to_string()),
+        };
+        insta::assert_json_snapshot!(settings);
+    }
 }

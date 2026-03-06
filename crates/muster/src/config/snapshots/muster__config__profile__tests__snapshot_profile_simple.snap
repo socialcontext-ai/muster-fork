@@ -1,0 +1,15 @@
+---
+source: crates/muster/src/config/profile.rs
+expression: profile
+---
+{
+  "id": "my-project",
+  "name": "My Project",
+  "color": "#f97316",
+  "tabs": [
+    {
+      "name": "Shell",
+      "cwd": "/tmp"
+    }
+  ]
+}

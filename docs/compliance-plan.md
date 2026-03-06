@@ -98,14 +98,21 @@ Added structured tracing to core library operations.
 
 ---
 
-## Phase 4: Testing Infrastructure
+## Phase 4: Testing Infrastructure [DONE]
 
-### 4a. Add insta for snapshot testing
-- Add `insta` to workspace dev-dependencies.
-- Identify CLI output or serialization formats that benefit from snapshot testing.
-- Add snapshot tests for profile serialization and CLI output formatting.
+### 4a. Add insta for snapshot testing [DONE]
+- Added `insta` (v1, with `json` feature) to workspace dev-dependencies.
+- Added `cargo-insta` CLI tool for snapshot review workflow.
+- Added 5 snapshot tests:
+  - `test_snapshot_profile_simple` — single-tab profile JSON format
+  - `test_snapshot_profile_with_panes` — multi-pane profile with layout
+  - `test_snapshot_settings_default` — default settings (all null)
+  - `test_snapshot_settings_populated` — fully populated settings
+  - `test_snapshot_theme_commands` — full theme command list for a session
+- All snapshots reviewed and accepted.
 
-**Verify**: `cargo nextest run` passes. Snapshots reviewed and accepted.
+**Verified**: `cargo clippy --workspace` zero warnings. `cargo fmt --check` passes.
+81 tests passed, 26 skipped.
 
 ---
 

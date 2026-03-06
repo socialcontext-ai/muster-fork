@@ -504,4 +504,47 @@ mod tests {
             "None layout should not appear in JSON: {json}"
         );
     }
+
+    #[test]
+    fn test_snapshot_profile_simple() {
+        let profile = Profile {
+            id: "my-project".to_string(),
+            name: "My Project".to_string(),
+            color: "#f97316".to_string(),
+            tabs: vec![TabProfile {
+                name: "Shell".to_string(),
+                cwd: "/tmp".to_string(),
+                command: None,
+                layout: None,
+                panes: vec![],
+            }],
+        };
+        insta::assert_json_snapshot!(profile);
+    }
+
+    #[test]
+    fn test_snapshot_profile_with_panes() {
+        let profile = Profile {
+            id: "pane-layout".to_string(),
+            name: "Pane Layout".to_string(),
+            color: "#00ff00".to_string(),
+            tabs: vec![TabProfile {
+                name: "Dev".to_string(),
+                cwd: "/home/user/project".to_string(),
+                command: None,
+                layout: Some("5a4a,204x51,0,0{102x51,0,0,0,101x51,103,0,1}".to_string()),
+                panes: vec![
+                    PaneProfile {
+                        cwd: Some("/home/user/project/src".to_string()),
+                        command: Some("vim .".to_string()),
+                    },
+                    PaneProfile {
+                        cwd: Some("/home/user/project".to_string()),
+                        command: Some("cargo watch".to_string()),
+                    },
+                ],
+            }],
+        };
+        insta::assert_json_snapshot!(profile);
+    }
 }
