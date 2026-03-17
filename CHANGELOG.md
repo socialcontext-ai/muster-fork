@@ -7,41 +7,31 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.4.0] - 2026-03-17
+## [0.1.1] - 2026-03-17
 
-### Added
-- 28 CLI integration tests via `assert_cmd`: profile CRUD, list, color,
-  error cases, and no-session behavior for status/ps/ports/top.
-- Tests use `TMUX_TMPDIR` isolation and seeded temp config dirs.
-- Coverage baseline established with `cargo-llvm-cov`: 60% line coverage
-  across the workspace (135 tests with `--run-ignored all`).
-
-## [0.3.0] - 2026-03-17
-
-### Changed
-- Unified CLI error handling: all command handlers now return `CliError` instead
-  of calling `process::exit(1)`. Reduced exit calls from 23 to 3 (exec_tmux_attach
-  and main error handler only).
-- Added `CliError` type with `User` (display as-is) and `Internal` (wrapped library
-  errors) variants, plus `bail!` macro for ergonomic early returns.
-
-### Fixed
-- Added `"server exited"` and `"server not found"` to tmux soft error patterns,
-  preventing crashes when the tmux server shuts down between operations.
-
-## [0.2.0] - 2026-03-17
+Internal refactoring, error handling, and test infrastructure. No user-facing changes.
 
 ### Changed
 - Refactored CLI from a 2141-line monolith into focused modules: `commands/`
   directory with one module per command, plus utility modules for formatting,
   process trees, ports, resources, tab parsing, editing, and terminal operations.
   `main.rs` is now 125 lines of pure dispatch.
+- Unified CLI error handling: all command handlers return `CliError` instead
+  of calling `process::exit(1)`. Reduced exit calls from 23 to 3.
 - Updated contributing guide with CLI module structure.
 
 ### Added
-- Refactor plan document (`docs/refactor-plan.md`) tracking CLI restructuring
-  and future integration test / error handling phases.
+- `CliError` type with `User`/`Internal` variants and `bail!` macro.
+- 28 CLI integration tests via `assert_cmd`: profile CRUD, list, color,
+  error cases, and no-session behavior for status/ps/ports/top.
+- Tests use `TMUX_TMPDIR` isolation and seeded temp config dirs.
+- Coverage baseline: 60% line coverage (135 tests with `--run-ignored all`).
+- Refactor plan document (`docs/refactor-plan.md`).
 - This changelog.
+
+### Fixed
+- Added `"server exited"` and `"server not found"` to tmux soft error patterns,
+  preventing crashes when the tmux server shuts down between operations.
 
 ## [0.1.0] - 2026-03-17
 
