@@ -80,6 +80,7 @@ pub enum Command {
     },
 
     /// Manage session colors
+    #[command(alias = "colour")]
     Color {
         /// Profile name, ID, or session name
         session: Option<String>,
