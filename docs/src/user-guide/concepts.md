@@ -36,7 +36,7 @@ There is no application-level cache. When you need session state, muster asks tm
 All managed sessions use the prefix `muster_` followed by a slugified profile ID:
 
 ```
-muster_notes
+muster_myproject
 muster_web-app
 ```
 

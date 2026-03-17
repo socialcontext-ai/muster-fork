@@ -3,10 +3,10 @@
 Check on a session's terminal output without attaching:
 
 ```bash
-muster peek notes               # all windows, last 50 lines each
-muster peek notes Shell         # specific window only
-muster peek notes -n 10         # last 10 lines per window
-muster peek notes --json        # machine-readable output
+muster peek myproject               # all windows, last 50 lines each
+muster peek myproject Shell         # specific window only
+muster peek myproject -n 10         # last 10 lines per window
+muster peek myproject --json        # machine-readable output
 ```
 
 Peek uses `tmux capture-pane` to grab scrollback from each window. It's a read-only operation that doesn't affect the session.

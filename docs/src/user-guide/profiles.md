@@ -6,7 +6,7 @@ Profiles are saved templates for creating terminal groups. They define the group
 
 ```bash
 # Basic profile with one tab
-muster profile save notes --tab 'Shell:~/work/notes' --color '#f97316'
+muster profile save myproject --tab 'Shell:~/work/myproject' --color '#f97316'
 
 # Multi-tab profile
 muster profile save webapp --color '#3b82f6' \
@@ -26,7 +26,7 @@ muster profile list
 ## Viewing a Profile
 
 ```bash
-muster profile show notes
+muster profile show myproject
 ```
 
 ## Editing Profiles
@@ -36,7 +36,7 @@ muster profile show notes
 Open the profile in your `$EDITOR` as TOML:
 
 ```bash
-muster profile edit notes
+muster profile edit myproject
 ```
 
 ### Inline Updates
@@ -44,24 +44,24 @@ muster profile edit notes
 Update specific fields without opening an editor:
 
 ```bash
-muster profile update notes --name renamed --color '#22c55e'
+muster profile update myproject --name renamed --color '#22c55e'
 ```
 
 ## Managing Tabs
 
 ```bash
 # Add a tab
-muster profile add-tab notes --name Tests --cwd ~/work/notes --command 'cargo test --watch'
+muster profile add-tab myproject --name Tests --cwd ~/work/myproject --command 'cargo test --watch'
 
 # Remove a tab (by name or 0-based index)
-muster profile remove-tab notes Tests
-muster profile remove-tab notes 2
+muster profile remove-tab myproject Tests
+muster profile remove-tab myproject 2
 ```
 
 ## Deleting Profiles
 
 ```bash
-muster profile delete notes
+muster profile delete myproject
 ```
 
 This removes the profile from `profiles.json`. It does not affect any running sessions that were launched from this profile.
@@ -73,12 +73,12 @@ Profiles are stored in `~/.config/muster/profiles.json`:
 ```json
 {
   "profiles": {
-    "notes": {
-      "id": "notes",
-      "name": "notes",
+    "myproject": {
+      "id": "myproject",
+      "name": "myproject",
       "color": "#f97316",
       "tabs": [
-        { "name": "Shell", "cwd": "/Users/you/work/notes", "command": null }
+        { "name": "Shell", "cwd": "/Users/you/work/myproject", "command": null }
       ]
     }
   }
