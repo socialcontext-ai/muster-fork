@@ -12,6 +12,7 @@
 - [Concepts](user-guide/concepts.md)
 - [Profiles](user-guide/profiles.md)
 - [Sessions](user-guide/sessions.md)
+- [Colors](user-guide/colors.md)
 - [Peek](user-guide/peek.md)
 - [Pin & Unpin](user-guide/pin-unpin.md)
 - [Notifications](user-guide/notifications.md)

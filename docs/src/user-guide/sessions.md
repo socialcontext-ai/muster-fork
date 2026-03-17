@@ -54,13 +54,15 @@ muster ports webapp
 
 ## Changing Colors
 
-Change a running session's color without restarting:
-
 ```bash
+muster color webapp orange
 muster color webapp '#22c55e'
+muster colour webapp teal-dark   # colour is accepted as an alias
 ```
 
-Accepts a profile name, session ID, or full session name. The tmux status bar updates instantly. The profile is also updated, so the color persists on next `muster up`. If no session is running, updates the profile directly.
+The tmux status bar updates instantly and the profile is updated, so the color persists on next `muster up`. If no session is running, updates the profile directly.
+
+See [Colors](colors.md) for the full list of named colors and shade variants.
 
 ## Stopping Sessions
 
