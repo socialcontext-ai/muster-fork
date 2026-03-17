@@ -15,7 +15,44 @@ muster up sysmon
 
 You're now inside tmux with three tabs. Switch between them with `Ctrl-b n` (next) or `Ctrl-b 0/1/2`. Detach with `Ctrl-b d` to return to your shell — the session keeps running.
 
-> If you have `htop` installed, substitute `htop` for `top` in the Processes tab for a better experience.
+### Upgrading to htop
+
+`htop` is a better process monitor with color output, mouse support, and easier process management. Install it if you don't have it:
+
+```bash
+# macOS
+brew install htop
+
+# Debian/Ubuntu
+sudo apt install htop
+
+# Fedora/RHEL
+sudo dnf install htop
+```
+
+Then edit the sysmon profile to swap in `htop`. From outside tmux, run:
+
+```bash
+muster profile edit sysmon
+```
+
+This opens the profile in `$EDITOR` as TOML. Find the Processes tab and change the command:
+
+```toml
+[[tabs]]
+name = "Processes"
+cwd = "/Users/you"
+command = "top"        # change this to "htop"
+```
+
+Save and close the editor. Then bounce the session to pick up the change:
+
+```bash
+muster down sysmon
+muster up sysmon
+```
+
+The Processes tab now runs `htop`.
 
 ## Create Your Own Profile
 
