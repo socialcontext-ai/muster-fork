@@ -6,10 +6,10 @@ Sessions are running tmux sessions managed by muster.
 
 ```bash
 # From a profile (creates or reattaches)
-muster launch "My Project"
+muster launch webapp
 
 # Create without attaching
-muster launch "My Project" --detach
+muster launch webapp --detach
 ```
 
 `launch` is idempotent — if the session already exists, it attaches. If not, it creates from the profile and attaches.
@@ -21,8 +21,8 @@ muster launch "My Project" --detach
 Create a session without a saved profile:
 
 ```bash
-muster new "Scratch" --tab 'Shell:~/work' --color '#808080'
-muster new "Quick" --detach
+muster new scratch --tab 'Shell:~/work' --color '#808080'
+muster new scratch --detach
 ```
 
 If `--tab` is omitted, defaults to a single "Shell" tab at `$HOME`.
@@ -30,14 +30,11 @@ If `--tab` is omitted, defaults to a single "Shell" tab at `$HOME`.
 ## Attaching
 
 ```bash
-# By profile name
-muster attach "My Project"
-
-# By full session name
-muster attach muster_my-project
+# By profile name or session name
+muster attach webapp
 
 # Switch to a specific window on attach
-muster attach "My Project" --window 2
+muster attach webapp --window 2
 ```
 
 ## Status
@@ -55,11 +52,11 @@ muster list
 ```bash
 # Show processes running inside sessions
 muster ps
-muster ps "My Project"
+muster ps webapp
 
 # Show listening ports
 muster ports
-muster ports "My Project"
+muster ports webapp
 ```
 
 ## Changing Colors
@@ -67,7 +64,7 @@ muster ports "My Project"
 Change a running session's color without restarting:
 
 ```bash
-muster color "My Project" '#22c55e'
+muster color webapp '#22c55e'
 ```
 
 Accepts a profile name, session ID, or full session name. The tmux status bar updates instantly. This does not update the profile — to persist the color change, use `muster profile update`.
@@ -75,7 +72,7 @@ Accepts a profile name, session ID, or full session name. The tmux status bar up
 ## Destroying Sessions
 
 ```bash
-muster kill "My Project"
+muster kill webapp
 ```
 
 Accepts a profile name, session ID, or full session name. Session metadata dies with the tmux session — no file cleanup needed.
@@ -87,5 +84,5 @@ All commands support `--json` for machine-readable output:
 ```bash
 muster status --json
 muster list --json
-muster peek my-project --json
+muster peek webapp --json
 ```

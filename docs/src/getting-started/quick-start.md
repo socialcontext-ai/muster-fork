@@ -6,10 +6,10 @@ Save a profile for a project with one or more tabs:
 
 ```bash
 # Single-tab profile
-muster profile save "Notes" --tab 'Shell:~/work/notes' --color '#f97316'
+muster profile save notes --tab 'Shell:~/work/notes' --color '#f97316'
 
 # Multi-tab profile
-muster profile save "Web App" --color '#3b82f6' \
+muster profile save webapp --color '#3b82f6' \
   --tab 'Shell:~/work/app' \
   --tab 'Server:~/work/app:npm start' \
   --tab 'Logs:~/work/app/logs'
@@ -18,7 +18,7 @@ muster profile save "Web App" --color '#3b82f6' \
 ## Launch a Session
 
 ```bash
-muster launch "Notes"
+muster launch notes
 ```
 
 This creates the tmux session and drops you in. You're now inside tmux — detach with `Ctrl-b d` to return to your shell.
@@ -37,7 +37,7 @@ muster status
 
 ```bash
 # By profile name
-muster launch "Notes"
+muster launch notes
 
 # By session name directly
 muster attach muster_notes
@@ -48,7 +48,7 @@ muster attach muster_notes
 Create a quick throwaway session without saving a profile:
 
 ```bash
-muster new "Scratch"
+muster new scratch
 ```
 
 ## Background Sessions
@@ -56,18 +56,18 @@ muster new "Scratch"
 Create without attaching:
 
 ```bash
-muster launch "Notes" --detach
-muster new "Background" --detach
+muster launch notes --detach
+muster new scratch --detach
 ```
 
 ## Modify Profiles
 
 ```bash
 # Add a tab to an existing profile
-muster profile add-tab "Notes" --name Editor --cwd ~/work/notes
+muster profile add-tab notes --name Editor --cwd ~/work/notes
 
 # Edit the full profile in $EDITOR
-muster profile edit "Notes"
+muster profile edit notes
 ```
 
 ## Typical Workflow
@@ -77,4 +77,4 @@ muster profile edit "Notes"
 3. Work inside tmux. Use `Ctrl-b d` to detach back to your regular shell.
 4. **`muster launch <name>`** again to reattach later
 5. **`muster status`** from another terminal to see all sessions
-6. **`muster kill <session>`** when done
+6. **`muster kill <name>`** when done

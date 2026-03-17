@@ -6,13 +6,13 @@ Profiles are saved templates for creating terminal groups. They define the group
 
 ```bash
 # Basic profile with one tab
-muster profile save "My Project" --tab 'Shell:~/work/project' --color '#f97316'
+muster profile save notes --tab 'Shell:~/work/notes' --color '#f97316'
 
 # Multi-tab profile
-muster profile save "Full Stack" --color '#3b82f6' \
+muster profile save webapp --color '#3b82f6' \
   --tab 'Shell:~/work/app' \
   --tab 'Server:~/work/app:npm run dev' \
-  --tab 'Logs:~/var/log'
+  --tab 'Logs:~/work/app/logs'
 ```
 
 The `--tab` flag uses colon-delimited format: `name:cwd` or `name:cwd:command`. It is repeatable for multiple tabs. If omitted, defaults to a single "Shell" tab at `$HOME`.
@@ -26,7 +26,7 @@ muster profile list
 ## Viewing a Profile
 
 ```bash
-muster profile show "My Project"
+muster profile show notes
 ```
 
 ## Editing Profiles
@@ -36,7 +36,7 @@ muster profile show "My Project"
 Open the profile in your `$EDITOR` as TOML:
 
 ```bash
-muster profile edit "My Project"
+muster profile edit notes
 ```
 
 ### Inline Updates
@@ -44,24 +44,24 @@ muster profile edit "My Project"
 Update specific fields without opening an editor:
 
 ```bash
-muster profile update "My Project" --name "Renamed" --color '#22c55e'
+muster profile update notes --name renamed --color '#22c55e'
 ```
 
 ## Managing Tabs
 
 ```bash
 # Add a tab
-muster profile add-tab "My Project" --name Tests --cwd ~/work/project --command 'cargo test --watch'
+muster profile add-tab notes --name Tests --cwd ~/work/notes --command 'cargo test --watch'
 
 # Remove a tab (by name or 0-based index)
-muster profile remove-tab "My Project" Tests
-muster profile remove-tab "My Project" 2
+muster profile remove-tab notes Tests
+muster profile remove-tab notes 2
 ```
 
 ## Deleting Profiles
 
 ```bash
-muster profile delete "My Project"
+muster profile delete notes
 ```
 
 This removes the profile from `profiles.json`. It does not affect any running sessions that were launched from this profile.
@@ -73,12 +73,12 @@ Profiles are stored in `~/.config/muster/profiles.json`:
 ```json
 {
   "profiles": {
-    "my-project": {
-      "id": "my-project",
-      "name": "My Project",
+    "notes": {
+      "id": "notes",
+      "name": "notes",
       "color": "#f97316",
       "tabs": [
-        { "name": "Shell", "cwd": "/Users/you/work/project", "command": null }
+        { "name": "Shell", "cwd": "/Users/you/work/notes", "command": null }
       ]
     }
   }
