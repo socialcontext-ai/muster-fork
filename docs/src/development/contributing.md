@@ -13,10 +13,21 @@ cargo doc --no-deps  # build docs (check for warnings)
 
 ```
 crates/
-├── muster/         # Library crate
-├── muster-cli/     # CLI binary crate
-└── muster-notify/  # macOS notification helper
-docs/               # mdBook documentation (this site)
+├── muster/             # Library crate (tmux bindings, profiles, theming, control mode)
+├── muster-cli/         # CLI binary crate
+│   └── src/
+│       ├── main.rs         # Entry point, CLI dispatch (~125 lines)
+│       ├── cli.rs          # Clap command definitions (library target)
+│       ├── commands/       # One module per command (list, launch, kill, etc.)
+│       ├── format.rs       # Terminal formatting (color dots, memory display)
+│       ├── tabs.rs         # Tab definition parsing
+│       ├── editing.rs      # TOML profile editing types
+│       ├── terminal.rs     # tmux attach, notification helpers
+│       ├── proctree.rs     # Process tree building/rendering
+│       ├── ports.rs        # Listening port detection
+│       └── resources.rs    # CPU/memory/GPU resource collection
+└── muster-notify/      # macOS notification helper
+docs/                   # mdBook documentation (this site)
 ```
 
 ## Documentation
