@@ -1,13 +1,12 @@
-use std::process;
-
 use super::CommandContext;
+use crate::error::bail;
 
 pub(crate) fn execute(
     ctx: &CommandContext,
     session: &str,
     windows: &[String],
     lines: u32,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let session_name = ctx.muster.resolve_session(session)?;
     let all_windows = ctx.muster.client().list_windows(&session_name)?;
 
@@ -21,8 +20,7 @@ pub(crate) fn execute(
     };
 
     if targets.is_empty() {
-        eprintln!("No matching windows found.");
-        process::exit(1);
+        bail!("No matching windows found.");
     }
 
     if ctx.json {

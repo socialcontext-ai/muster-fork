@@ -5,7 +5,7 @@ pub(crate) fn execute(
     ctx: &CommandContext,
     session: &str,
     window: Option<u32>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let session_name = ctx.muster.resolve_session(session)?;
 
     if let Some(idx) = window {

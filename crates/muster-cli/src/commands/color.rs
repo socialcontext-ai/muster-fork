@@ -1,14 +1,14 @@
 use std::io::IsTerminal;
-use std::process;
 
 use super::CommandContext;
+use crate::error::bail;
 
 pub(crate) fn execute(
     ctx: &CommandContext,
     session: Option<&str>,
     color: Option<&str>,
     list: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     if list {
         if ctx.json {
             let colors: Vec<serde_json::Value> = muster::NAMED_COLORS
@@ -64,9 +64,7 @@ pub(crate) fn execute(
         }
     } else {
         let (Some(session), Some(color)) = (session, color) else {
-            eprintln!("Usage: muster color <session> <color>");
-            eprintln!("       muster color --list");
-            process::exit(1);
+            bail!("Usage: muster color <session> <color>\n       muster color --list");
         };
         if let Ok(session_name) = ctx.muster.resolve_session(session) {
             ctx.muster.set_color(&session_name, color)?;
@@ -80,8 +78,7 @@ pub(crate) fn execute(
                 .iter()
                 .find(|p| p.name == session || p.id == session);
             let Some(p) = found else {
-                eprintln!("No session or profile found: {session}");
-                process::exit(1);
+                bail!("No session or profile found: {session}");
             };
             let resolved = muster::session::theme::resolve_color(color)?;
             let mut profile = p.clone();

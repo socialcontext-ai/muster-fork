@@ -5,24 +5,23 @@ use muster::{Muster, Profile, TabProfile};
 
 use super::CommandContext;
 use crate::editing::EditableProfile;
+use crate::error::bail;
 use crate::format::color_dot;
 use crate::tabs::build_tabs;
 
-/// Resolve a profile by name or ID, exiting on failure.
-fn resolve_profile(m: &Muster, input: &str) -> Result<Profile, Box<dyn std::error::Error>> {
+/// Resolve a profile by name or ID.
+fn resolve_profile(m: &Muster, input: &str) -> crate::error::Result<Profile> {
     let profiles = m.list_profiles()?;
     let found = profiles
         .into_iter()
         .find(|p| p.name == input || p.id == input);
-    if let Some(p) = found {
-        Ok(p)
-    } else {
-        eprintln!("Profile not found: {input}");
-        process::exit(1);
+    match found {
+        Some(p) => Ok(p),
+        None => bail!("Profile not found: {input}"),
     }
 }
 
-pub(crate) fn execute_list(ctx: &CommandContext) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_list(ctx: &CommandContext) -> crate::error::Result {
     let profiles = ctx.muster.list_profiles()?;
     if ctx.json {
         println!("{}", serde_json::to_string_pretty(&profiles)?);
@@ -42,22 +41,18 @@ pub(crate) fn execute_list(ctx: &CommandContext) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-pub(crate) fn execute_delete(
-    ctx: &CommandContext,
-    id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_delete(ctx: &CommandContext, id: &str) -> crate::error::Result {
     let profiles = ctx.muster.list_profiles()?;
     let found = profiles.iter().find(|p| p.name == id || p.id == id);
 
-    if let Some(p) = found {
-        let name = p.name.clone();
-        ctx.muster.delete_profile(&p.id)?;
-        if !ctx.json {
-            println!("Deleted: {name}");
-        }
-    } else {
-        eprintln!("Profile not found: {id}");
-        process::exit(1);
+    let Some(p) = found else {
+        bail!("Profile not found: {id}");
+    };
+
+    let name = p.name.clone();
+    ctx.muster.delete_profile(&p.id)?;
+    if !ctx.json {
+        println!("Deleted: {name}");
     }
     Ok(())
 }
@@ -67,7 +62,7 @@ pub(crate) fn execute_save(
     name: &str,
     tab: &[String],
     color: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let tabs = build_tabs(tab)?;
     let color = muster::session::theme::resolve_color(color)?;
 
@@ -93,15 +88,14 @@ pub(crate) fn execute_add_tab(
     name: String,
     cwd: String,
     command: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let profiles = ctx.muster.list_profiles()?;
     let found = profiles
         .iter()
         .find(|p| p.name == profile || p.id == profile);
 
     let Some(p) = found else {
-        eprintln!("Profile not found: {profile}");
-        process::exit(1);
+        bail!("Profile not found: {profile}");
     };
 
     let cwd = if cwd == "." {
@@ -132,10 +126,7 @@ pub(crate) fn execute_add_tab(
     Ok(())
 }
 
-pub(crate) fn execute_show(
-    ctx: &CommandContext,
-    id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_show(ctx: &CommandContext, id: &str) -> crate::error::Result {
     let p = resolve_profile(&ctx.muster, id)?;
     if ctx.json {
         println!("{}", serde_json::to_string_pretty(&p)?);
@@ -166,10 +157,10 @@ pub(crate) fn execute_show(
     Ok(())
 }
 
-pub(crate) fn execute_edit(
-    ctx: &CommandContext,
-    id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+/// The `profile edit` command uses an interactive retry loop with user prompts.
+/// `process::exit` is appropriate here for user-initiated aborts since we're
+/// in the middle of an interactive dialogue that can't be expressed as `Err`.
+pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Result {
     let p = resolve_profile(&ctx.muster, id)?;
     let old_id = p.id.clone();
     let editable = EditableProfile::from(&p);
@@ -187,8 +178,7 @@ pub(crate) fn execute_edit(
         let status = process::Command::new(&editor).arg(tmp.path()).status()?;
 
         if !status.success() {
-            eprintln!("Editor exited with non-zero status");
-            process::exit(1);
+            bail!("Editor exited with non-zero status");
         }
 
         let content = std::fs::read_to_string(tmp.path())?;
@@ -200,8 +190,7 @@ pub(crate) fn execute_edit(
                 let mut answer = String::new();
                 std::io::stdin().read_line(&mut answer)?;
                 if answer.trim().eq_ignore_ascii_case("n") {
-                    eprintln!("Aborted.");
-                    process::exit(1);
+                    bail!("Aborted.");
                 }
                 continue;
             }
@@ -218,8 +207,7 @@ pub(crate) fn execute_edit(
                 let mut answer = String::new();
                 std::io::stdin().read_line(&mut answer)?;
                 if answer.trim().eq_ignore_ascii_case("n") {
-                    eprintln!("Aborted.");
-                    process::exit(1);
+                    bail!("Aborted.");
                 }
                 continue;
             }
@@ -231,8 +219,7 @@ pub(crate) fn execute_edit(
             let mut answer = String::new();
             std::io::stdin().read_line(&mut answer)?;
             if answer.trim().eq_ignore_ascii_case("n") {
-                eprintln!("Aborted.");
-                process::exit(1);
+                bail!("Aborted.");
             }
             continue;
         }
@@ -242,11 +229,10 @@ pub(crate) fn execute_edit(
             ctx.muster.update_profile(profile)?
         } else {
             if ctx.muster.resolve_session(&old_id).is_ok() {
-                eprintln!(
+                bail!(
                     "Cannot rename: session for \"{}\" is running. Kill it first.",
                     p.name
                 );
-                process::exit(1);
             }
             ctx.muster.rename_profile(&old_id, profile)?
         };
@@ -267,10 +253,9 @@ pub(crate) fn execute_update(
     id: &str,
     name: Option<&str>,
     color: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     if name.is_none() && color.is_none() {
-        eprintln!("At least one of --name or --color is required.");
-        process::exit(1);
+        bail!("At least one of --name or --color is required.");
     }
 
     let mut p = resolve_profile(&ctx.muster, id)?;
@@ -283,8 +268,7 @@ pub(crate) fn execute_update(
     let saved = if let Some(new_name) = name {
         let new_id = muster::config::profile::slugify(new_name);
         if new_id != old_id && ctx.muster.resolve_session(&old_id).is_ok() {
-            eprintln!("Kill session for \"{}\" before renaming.", p.name);
-            process::exit(1);
+            bail!("Kill session for \"{}\" before renaming.", p.name);
         }
         p.name = new_name.to_string();
         p.id = new_id;
@@ -309,28 +293,25 @@ pub(crate) fn execute_remove_tab(
     ctx: &CommandContext,
     profile: &str,
     tab: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let mut p = resolve_profile(&ctx.muster, profile)?;
 
     let idx = if let Ok(i) = tab.parse::<usize>() {
         if i >= p.tabs.len() {
-            eprintln!(
+            bail!(
                 "Tab index {i} out of range (profile has {} tab(s)).",
                 p.tabs.len()
             );
-            process::exit(1);
         }
         i
     } else if let Some(i) = p.tabs.iter().position(|t| t.name == tab) {
         i
     } else {
-        eprintln!("Tab not found: {tab}");
-        process::exit(1);
+        bail!("Tab not found: {tab}");
     };
 
     if p.tabs.len() == 1 {
-        eprintln!("Cannot remove the last tab from a profile.");
-        process::exit(1);
+        bail!("Cannot remove the last tab from a profile.");
     }
 
     p.tabs.remove(idx);

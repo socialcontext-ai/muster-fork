@@ -9,6 +9,7 @@ use muster_cli::{Cli, Command, NotificationAction, ProfileAction};
 
 mod commands;
 mod editing;
+mod error;
 mod format;
 mod ports;
 mod proctree;
@@ -23,7 +24,7 @@ fn default_config_dir() -> PathBuf {
         .join("muster")
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> error::Result {
     let cli = Cli::parse();
     let config_dir = cli.config_dir.unwrap_or_else(default_config_dir);
     let m = Muster::init(&config_dir)?;

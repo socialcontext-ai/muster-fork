@@ -1,7 +1,7 @@
 use super::CommandContext;
 use crate::format::color_dot;
 
-pub(crate) fn execute(ctx: &CommandContext) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute(ctx: &CommandContext) -> crate::error::Result {
     let profiles = ctx.muster.list_profiles()?;
     let sessions = ctx.muster.list_sessions()?;
 

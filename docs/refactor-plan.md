@@ -112,18 +112,34 @@ where `...` is command-specific args destructured from the `Command` enum.
 
 ---
 
-## Phase 3: Error Handling Polish
+## Phase 3: Error Handling Polish [DONE]
+
+### CLI Error Type
+
+Added `crate::error::CliError` with two variants:
+- `User(String)` — user-facing messages displayed as-is (e.g. "Profile not found: foo")
+- `Internal(Box<dyn Error>)` — propagated library/infra errors
+
+All command handlers return `crate::error::Result`. The `bail!` macro provides
+ergonomic early returns for user-facing errors.
+
+### process::exit Elimination
+
+Reduced `process::exit` calls from 23 to 3:
+- `terminal.rs` (2): `exec_tmux_attach` is `-> !`, exits are inherent to exec/fork
+- `main.rs` (1): top-level error handler
+
+All other error paths now return `Err(CliError)` through the normal Result chain.
 
 ### Soft Error Expansion
 
-Additional tmux stderr messages to treat as non-errors for query commands:
-- `"no sessions"` / `"session not found"`
-- `"window not found"` / `"pane not found"`
-- `"server exited"` / `"server not found"`
+Added `"server exited"` and `"server not found"` to `TmuxClient::cmd()` soft
+error patterns, joining existing `"no server running"`, `"no current session"`,
+and `"error connecting to"`.
 
-### Systematic Approach
+Audited all `cmd()` call sites — the soft patterns are server-availability
+checks that apply universally. A `cmd_soft()` variant was not needed since
+no call site requires context-specific soft error handling.
 
-1. Add `cmd_soft()` method to `TmuxClient` — caller provides context-specific soft patterns
-2. Audit all `cmd()` call sites for appropriate soft error handling
-3. Replace `process::exit(1)` in command handlers with proper `Err(...)` returns
-4. Unify error display through `run()` → `main()`
+**Verified**: `cargo clippy --workspace` zero warnings. `cargo fmt --check` passes.
+81 tests passed, 26 ignored (tmux-dependent).

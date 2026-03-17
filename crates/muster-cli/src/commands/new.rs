@@ -8,7 +8,7 @@ pub(crate) fn execute(
     tab: &[String],
     color: &str,
     detach: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let tabs = build_tabs(tab)?;
     let color = muster::session::theme::resolve_color(color)?;
 

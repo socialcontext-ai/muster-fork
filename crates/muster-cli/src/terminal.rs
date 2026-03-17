@@ -133,7 +133,7 @@ pub(crate) fn send_notification(
 /// macOS requires a `CFBundleIdentifier` for persistent Notification Center access.
 /// This creates a minimal .app bundle containing the `muster-notify` binary,
 /// codesigns it, and prints instructions for first-run permission grant.
-pub(crate) fn setup_notifications() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn setup_notifications() -> crate::error::Result {
     let config_dir = dirs::config_dir()
         .ok_or("Could not determine config directory")?
         .join("muster");
@@ -178,9 +178,9 @@ pub(crate) fn setup_notifications() -> Result<(), Box<dyn std::error::Error>> {
         .or_else(|| which::which("muster-notify").ok());
 
     let Some(source) = notify_binary else {
-        eprintln!("Could not find muster-notify binary.");
-        eprintln!("Install it: cargo install --path crates/muster-notify");
-        std::process::exit(1);
+        crate::error::bail!(
+            "Could not find muster-notify binary.\nInstall it: cargo install --path crates/muster-notify"
+        );
     };
 
     let dest = macos_dir.join("muster-notify");
@@ -220,7 +220,7 @@ pub(crate) fn setup_notifications() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Remove the MusterNotify.app bundle and clean up delivered notifications.
-pub(crate) fn uninstall_notifications() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn uninstall_notifications() -> crate::error::Result {
     let bundle_dir = dirs::config_dir()
         .ok_or("Could not determine config directory")?
         .join("muster/MusterNotify.app");

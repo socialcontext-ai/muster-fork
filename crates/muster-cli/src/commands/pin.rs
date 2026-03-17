@@ -1,6 +1,6 @@
 use super::CommandContext;
 
-pub(crate) fn execute_pin(ctx: &CommandContext) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_pin(ctx: &CommandContext) -> crate::error::Result {
     let result = ctx.muster.pin_window()?;
     if !ctx.json {
         match result {
@@ -12,7 +12,7 @@ pub(crate) fn execute_pin(ctx: &CommandContext) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-pub(crate) fn execute_unpin(ctx: &CommandContext) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_unpin(ctx: &CommandContext) -> crate::error::Result {
     ctx.muster.unpin_window()?;
     if !ctx.json {
         println!("Window unpinned from profile.");

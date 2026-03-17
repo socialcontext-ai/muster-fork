@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "muster"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dirs",
  "insta",
@@ -475,7 +475,7 @@ dependencies = [
 
 [[package]]
 name = "muster-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "clap-markdown",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "muster-notify"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "block2",
  "objc2",

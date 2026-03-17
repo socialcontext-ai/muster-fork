@@ -6,7 +6,7 @@ pub(crate) fn execute_sync_rename(
     session: &str,
     window: u32,
     name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     ctx.muster.sync_rename(session, window, name)?;
     Ok(())
 }
@@ -17,7 +17,7 @@ pub(crate) fn execute_pane_died(
     window_name: &str,
     pane_id: &str,
     exit_code: i32,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let display_name = ctx
         .muster
         .client()
@@ -73,7 +73,7 @@ pub(crate) fn execute_bell(
     ctx: &CommandContext,
     session_name: &str,
     window_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> crate::error::Result {
     let display_name = ctx
         .muster
         .client()

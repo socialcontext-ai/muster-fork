@@ -1,18 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
-use std::process;
 
 use super::{CommandContext, filter_sessions};
+use crate::error::bail;
 use crate::format::{color_dot, format_memory};
 use crate::ports::{MatchedPort, build_listening_ports};
 use crate::proctree::{build_process_table, build_tree, collect_pids, render_tree};
 use crate::resources::{build_gpu_table, build_resource_table, collect_tree_resources};
 
-pub(crate) fn execute_ps(
-    ctx: &CommandContext,
-    profile: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_ps(ctx: &CommandContext, profile: Option<&str>) -> crate::error::Result {
     let mut sessions = ctx.muster.list_sessions()?;
-    filter_sessions(&mut sessions, profile);
+    filter_sessions(&mut sessions, profile)?;
 
     if sessions.is_empty() {
         if ctx.json {
@@ -119,12 +116,9 @@ pub(crate) fn execute_ps(
 }
 
 #[allow(clippy::too_many_lines)]
-pub(crate) fn execute_ports(
-    ctx: &CommandContext,
-    profile: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_ports(ctx: &CommandContext, profile: Option<&str>) -> crate::error::Result {
     let mut sessions = ctx.muster.list_sessions()?;
-    filter_sessions(&mut sessions, profile);
+    filter_sessions(&mut sessions, profile)?;
 
     if sessions.is_empty() {
         if ctx.json {
@@ -136,8 +130,7 @@ pub(crate) fn execute_ports(
     }
 
     let Some(listening) = build_listening_ports() else {
-        eprintln!("Could not query listening ports: lsof not found or failed.");
-        process::exit(1);
+        bail!("Could not query listening ports: lsof not found or failed.");
     };
     if listening.is_empty() {
         if ctx.json {
@@ -268,12 +261,9 @@ pub(crate) fn execute_ports(
 }
 
 #[allow(clippy::too_many_lines)]
-pub(crate) fn execute_top(
-    ctx: &CommandContext,
-    profile: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn execute_top(ctx: &CommandContext, profile: Option<&str>) -> crate::error::Result {
     let mut sessions = ctx.muster.list_sessions()?;
-    filter_sessions(&mut sessions, profile);
+    filter_sessions(&mut sessions, profile)?;
 
     if sessions.is_empty() {
         if ctx.json {
