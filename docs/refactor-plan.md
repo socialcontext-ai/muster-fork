@@ -96,19 +96,37 @@ where `...` is command-specific args destructured from the `Command` enum.
 
 ---
 
-## Phase 2: Integration Test Improvements
+## Phase 2: Integration Test Improvements [DONE]
 
-### Current State
-- All 21 tests are unit tests for parser functions in main.rs
-- No integration tests exist (`crates/muster-cli/tests/` doesn't exist)
-- 26 tests skipped in earlier runs were tmux-dependent tests in the core library
+### CLI Integration Tests
 
-### Approach
+28 `assert_cmd` integration tests in `crates/muster-cli/tests/cli_integration.rs`:
+- Profile CRUD: list, show, save, delete, add-tab, remove-tab, update (text + JSON)
+- List command: profiles, empty config, JSON output
+- Color: `--list` in text and JSON
+- Error cases: not found, validation failures
+- No-session behavior: status, ps, ports, top
 
-1. **Profile CRUD tests** (no tmux needed) — `assert_cmd` tests using temp config dir
-2. **`muster list --json`** — with temp config dir, no tmux required
-3. **Parser snapshot tests** — `insta` snapshots for `render_tree` and display functions
-4. **Tmux-dependent tests** — behind `#[ignore]`, use `tmux -L muster_test` isolated server
+Tests use `TMUX_TMPDIR` to isolate from the real tmux server and
+`tempfile` config dirs with seeded `profiles.json`.
+
+### Tmux-Dependent Tests
+
+26 existing tests in the `muster` library crate cover tmux client CRUD,
+session lifecycle, theme application, and control mode. These are marked
+`#[ignore]` and run via `cargo nextest run --run-ignored all`. The nextest
+config serializes them via the `tmux-integration` test group.
+
+### Coverage Baseline (with `--run-ignored all`)
+
+- **Overall**: 60.0% line coverage (135 tests)
+- **config/profile.rs**: 97.3% | **config/settings.rs**: 98.6%
+- **session/mod.rs**: 87.5% | **session/theme.rs**: 91.6%
+- **tmux/client.rs**: 87.1% | **tmux/control.rs**: 79.8%
+- **muster.rs**: 28.6% (facade — many methods need live sessions)
+- **muster-notify**: 0% (macOS ObjC notification helper, untestable in harness)
+
+Coverage tooling: `cargo llvm-cov nextest --run-ignored all`
 
 ---
 
