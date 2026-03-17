@@ -378,20 +378,20 @@ fn color_list_json() {
 // ---- commands that need no sessions ----
 
 #[test]
-fn launch_nonexistent_profile() {
+fn up_nonexistent_profile() {
     let dir = setup_config();
     muster_cmd(&dir)
-        .args(["launch", "nonexistent"])
+        .args(["up", "nonexistent"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("Profile not found"));
 }
 
 #[test]
-fn kill_nonexistent_session() {
+fn down_nonexistent_session() {
     let dir = setup_config();
     muster_cmd(&dir)
-        .args(["kill", "nonexistent"])
+        .args(["down", "nonexistent"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("session not found"));

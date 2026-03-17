@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.0] - 2026-03-17
+
+### Changed
+- `muster launch` renamed to `muster up`; `muster kill` renamed to `muster down`.
+  `launch` and `kill` remain as aliases for backwards compatibility.
+
+---
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

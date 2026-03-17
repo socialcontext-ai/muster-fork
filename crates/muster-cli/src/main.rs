@@ -39,9 +39,9 @@ fn run() -> error::Result {
 
     match cli.command {
         Command::List => commands::list::execute(&ctx),
-        Command::Launch { profile, detach } => commands::launch::execute(&ctx, &profile, detach),
+        Command::Up { profile, detach } => commands::launch::execute(&ctx, &profile, detach),
         Command::Attach { session, window } => commands::attach::execute(&ctx, &session, window),
-        Command::Kill { session } => commands::kill::execute(&ctx, &session),
+        Command::Down { session } => commands::kill::execute(&ctx, &session),
         Command::New {
             name,
             tab,

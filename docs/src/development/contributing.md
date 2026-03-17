@@ -18,7 +18,7 @@ crates/
 │   └── src/
 │       ├── main.rs         # Entry point, CLI dispatch (~125 lines)
 │       ├── cli.rs          # Clap command definitions (library target)
-│       ├── commands/       # One module per command (list, launch, kill, etc.)
+│       ├── commands/       # One module per command (list, up/launch, down/kill, etc.)
 │       ├── format.rs       # Terminal formatting (color dots, memory display)
 │       ├── tabs.rs         # Tab definition parsing
 │       ├── editing.rs      # TOML profile editing types

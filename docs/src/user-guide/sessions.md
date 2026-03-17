@@ -2,19 +2,19 @@
 
 Sessions are running tmux sessions managed by muster.
 
-## Launching
+## Starting Sessions
 
 ```bash
 # From a profile (creates or reattaches)
-muster launch webapp
+muster up webapp
 
 # Create without attaching
-muster launch webapp --detach
+muster up webapp --detach
 ```
 
-`launch` is idempotent — if the session already exists, it attaches. If not, it creates from the profile and attaches.
+`up` is idempotent — if the session already exists, it attaches. If not, it creates from the profile and attaches.
 
-`launch` and `attach` replace the current process with `exec tmux attach`. Use `--detach` to create the session in the background without attaching.
+`up` and `attach` replace the current process with `exec tmux attach`. Use `--detach` to create the session in the background without attaching.
 
 ## Ad-hoc Sessions
 
@@ -69,10 +69,10 @@ muster color webapp '#22c55e'
 
 Accepts a profile name, session ID, or full session name. The tmux status bar updates instantly. This does not update the profile — to persist the color change, use `muster profile update`.
 
-## Destroying Sessions
+## Stopping Sessions
 
 ```bash
-muster kill webapp
+muster down webapp
 ```
 
 Accepts a profile name, session ID, or full session name. Session metadata dies with the tmux session — no file cleanup needed.

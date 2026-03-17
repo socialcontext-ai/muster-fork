@@ -15,15 +15,15 @@ muster profile save webapp --color '#3b82f6' \
   --tab 'Logs:~/work/app/logs'
 ```
 
-## Launch a Session
+## Start a Session
 
 ```bash
-muster launch myproject
+muster up myproject
 ```
 
 This creates the tmux session and drops you in. You're now inside tmux — detach with `Ctrl-b d` to return to your shell.
 
-If the session already exists, `launch` reattaches instead of creating a duplicate.
+If the session already exists, `up` reattaches instead of creating a duplicate.
 
 ## Check What's Running
 
@@ -37,7 +37,7 @@ muster status
 
 ```bash
 # By profile name
-muster launch myproject
+muster up myproject
 
 # By session name directly
 muster attach muster_myproject
@@ -56,7 +56,7 @@ muster new scratch
 Create without attaching:
 
 ```bash
-muster launch myproject --detach
+muster up myproject --detach
 muster new scratch --detach
 ```
 
@@ -73,8 +73,8 @@ muster profile edit myproject
 ## Typical Workflow
 
 1. **`muster profile save`** — define a project (name, tabs, color)
-2. **`muster launch <name>`** — start or reattach (execs `tmux attach`, replacing your shell)
+2. **`muster up <name>`** — start or reattach (execs `tmux attach`, replacing your shell)
 3. Work inside tmux. Use `Ctrl-b d` to detach back to your regular shell.
-4. **`muster launch <name>`** again to reattach later
+4. **`muster up <name>`** again to reattach later
 5. **`muster status`** from another terminal to see all sessions
-6. **`muster kill <name>`** when done
+6. **`muster down <name>`** when done

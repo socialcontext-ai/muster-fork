@@ -6,9 +6,9 @@ This document contains the help content for the `muster` command-line program.
 
 * [`muster`↴](#muster)
 * [`muster list`↴](#muster-list)
-* [`muster launch`↴](#muster-launch)
+* [`muster up`↴](#muster-up)
 * [`muster attach`↴](#muster-attach)
-* [`muster kill`↴](#muster-kill)
+* [`muster down`↴](#muster-down)
 * [`muster new`↴](#muster-new)
 * [`muster color`↴](#muster-color)
 * [`muster ps`↴](#muster-ps)
@@ -44,9 +44,9 @@ Muster organizes terminal sessions into named, color-coded groups with saved pro
 ###### **Subcommands:**
 
 * `list` — List profiles and running sessions
-* `launch` — Launch or attach to a profile's session
+* `up` — Create or attach to a profile's session
 * `attach` — Attach to a running session
-* `kill` — Destroy a session
+* `down` — Destroy a session
 * `new` — Create an ad-hoc session
 * `color` — Manage session colors
 * `ps` — Show processes running inside sessions
@@ -75,11 +75,11 @@ List profiles and running sessions
 
 
 
-## `muster launch`
+## `muster up`
 
-Launch or attach to a profile's session
+Create or attach to a profile's session
 
-**Usage:** `muster launch [OPTIONS] <PROFILE>`
+**Usage:** `muster up [OPTIONS] <PROFILE>`
 
 ###### **Arguments:**
 
@@ -107,11 +107,11 @@ Attach to a running session
 
 
 
-## `muster kill`
+## `muster down`
 
 Destroy a session
 
-**Usage:** `muster kill <SESSION>`
+**Usage:** `muster down <SESSION>`
 
 ###### **Arguments:**
 

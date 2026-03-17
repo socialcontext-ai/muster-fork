@@ -34,8 +34,9 @@ pub enum Command {
     /// List profiles and running sessions
     List,
 
-    /// Launch or attach to a profile's session
-    Launch {
+    /// Create or attach to a profile's session
+    #[command(alias = "launch")]
+    Up {
         /// Profile name or ID
         profile: String,
         /// Create session but don't attach
@@ -53,7 +54,8 @@ pub enum Command {
     },
 
     /// Destroy a session
-    Kill {
+    #[command(alias = "kill")]
+    Down {
         /// Profile name, ID, or session name
         session: String,
     },
