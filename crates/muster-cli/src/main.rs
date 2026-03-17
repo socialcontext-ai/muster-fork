@@ -111,6 +111,16 @@ fn run() -> error::Result {
                 commands::profile::execute_remove_tab(&ctx, &profile, &tab)
             }
         },
+        Command::Settings {
+            terminal,
+            shell,
+            tmux_path,
+        } => commands::settings::execute(
+            &ctx,
+            terminal.as_deref(),
+            shell.as_deref(),
+            tmux_path.as_deref(),
+        ),
     }
 }
 

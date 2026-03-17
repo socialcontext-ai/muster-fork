@@ -16,8 +16,9 @@ pub struct Settings {
     /// Shell to use for new tmux panes. Defaults to `$SHELL`.
     #[serde(default)]
     pub shell: Option<String>,
-    /// Terminal emulator for notification click-to-source.
-    /// Values: "ghostty", "alacritty", "terminal". Default: "ghostty".
+    /// Terminal emulator for new windows and notification click-to-source.
+    /// Examples: "ghostty", "alacritty", "kitty", "wezterm", "terminal", "iterm2".
+    /// Default: platform default (Terminal.app on macOS, auto-detected on Linux).
     #[serde(default)]
     pub terminal: Option<String>,
 }

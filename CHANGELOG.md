@@ -7,6 +7,26 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0] - 2026-03-17
+
+### Added
+- `muster settings` command — show and update terminal/shell/tmux settings
+  without hand-editing JSON. Flags: `--terminal`, `--shell`, `--tmux-path`.
+  Displays `(default)` when terminal is not explicitly configured.
+- Linux terminal support: `detect_terminal()` probes PATH for ghostty, kitty,
+  alacritty, wezterm, gnome-terminal, konsole, xfce4-terminal, x-terminal-emulator,
+  with xterm as final fallback.
+- `open_terminal_linux()` with correct `-e` / `start --` invocation per terminal.
+
+### Changed
+- Default terminal on macOS is now `terminal` (Terminal.app) instead of ghostty.
+- `muster-notify` click-to-source supports kitty and wezterm in addition to
+  ghostty, alacritty, terminal, and iterm2.
+- `resolve_terminal()` is now the single source of truth; `exec_tmux_attach`
+  uses it instead of hard-coding a terminal name.
+
+---
+
 ## [0.1.1] - 2026-03-17
 
 Internal refactoring, error handling, and test infrastructure. No user-facing changes.

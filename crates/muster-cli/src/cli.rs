@@ -160,6 +160,19 @@ pub enum Command {
         #[command(subcommand)]
         action: NotificationAction,
     },
+
+    /// Show or update settings
+    Settings {
+        /// Set terminal emulator (e.g. ghostty, alacritty, kitty, wezterm, terminal, iterm2)
+        #[arg(long)]
+        terminal: Option<String>,
+        /// Set default shell
+        #[arg(long)]
+        shell: Option<String>,
+        /// Set tmux binary path
+        #[arg(long)]
+        tmux_path: Option<String>,
+    },
 }
 
 /// Profile subcommands.

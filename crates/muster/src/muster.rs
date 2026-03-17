@@ -544,6 +544,11 @@ impl Muster {
     pub fn settings(&self) -> Result<Settings> {
         self.settings.load()
     }
+
+    /// Save settings to disk.
+    pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+        self.settings.save(settings)
+    }
 }
 
 #[cfg(test)]

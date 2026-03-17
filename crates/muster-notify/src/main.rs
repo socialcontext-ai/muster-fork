@@ -73,7 +73,7 @@ impl Args {
         let mut body = String::new();
         let mut session = None;
         let mut window = None;
-        let mut terminal = "ghostty".to_string();
+        let mut terminal = "terminal".to_string();
         let mut timeout = 30u64;
         let mut positional = 0;
         let mut i = 0;
@@ -275,9 +275,32 @@ fn handle_click(session: Option<&str>, window: Option<&str>, terminal: &str) {
                 ])
                 .status();
         }
+        "kitty" => {
+            let _ = Command::new("open")
+                .args(["-na", "Kitty.app", "--args", &tmux, "attach", "-t", sess])
+                .status();
+        }
+        "wezterm" => {
+            let _ = Command::new("open")
+                .args([
+                    "-na",
+                    "WezTerm.app",
+                    "--args",
+                    "start",
+                    "--",
+                    &tmux,
+                    "attach",
+                    "-t",
+                    sess,
+                ])
+                .status();
+        }
         _ => {
+            // AppleScript fallback — works for Terminal.app, iTerm2, etc.
             let app_name = if terminal == "terminal" {
                 "Terminal"
+            } else if terminal == "iterm2" || terminal == "iterm" {
+                "iTerm"
             } else {
                 terminal
             };

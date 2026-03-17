@@ -10,6 +10,7 @@ pub(crate) mod notifications;
 pub(crate) mod peek;
 pub(crate) mod pin;
 pub(crate) mod profile;
+pub(crate) mod settings;
 pub(crate) mod status;
 
 use std::path::PathBuf;
