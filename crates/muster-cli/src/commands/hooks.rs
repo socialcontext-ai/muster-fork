@@ -1,5 +1,5 @@
 use super::CommandContext;
-use crate::terminal::send_notification;
+use crate::terminal::{resolve_terminal, send_notification};
 
 pub(crate) fn execute_sync_rename(
     ctx: &CommandContext,
@@ -54,12 +54,7 @@ pub(crate) fn execute_pane_died(
         format!("Exit code: {exit_code}\n{last_lines}")
     };
 
-    let terminal = ctx
-        .muster
-        .settings()
-        .ok()
-        .and_then(|s| s.terminal)
-        .unwrap_or_else(|| "ghostty".to_string());
+    let terminal = resolve_terminal(&ctx.settings);
     let summary = format!("Exited: {display_name} \u{25b8} {window_name}");
     send_notification(&summary, &body, session_name, window_name, &terminal);
 
@@ -80,12 +75,7 @@ pub(crate) fn execute_bell(
         .get_option(session_name, "@muster_name")?
         .unwrap_or_else(|| session_name.to_string());
 
-    let terminal = ctx
-        .muster
-        .settings()
-        .ok()
-        .and_then(|s| s.terminal)
-        .unwrap_or_else(|| "ghostty".to_string());
+    let terminal = resolve_terminal(&ctx.settings);
     let summary = format!("Bell: {display_name} \u{25b8} {window_name}");
 
     send_notification(&summary, "", session_name, window_name, &terminal);
