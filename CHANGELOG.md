@@ -7,6 +7,17 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.0] - 2026-03-17
+
+### Changed
+- `muster attach` is now hidden; use `muster up --tab <index>` to attach and
+  switch to a specific tab. `attach` still works for backwards compatibility.
+- Consistent "tab" terminology throughout CLI help text and documentation.
+  (`--window` on `attach` is now `--tab`; `peek` positional args renamed from
+  `WINDOWS` to `TABS`.)
+
+---
+
 ## [0.3.0] - 2026-03-17
 
 ### Changed

@@ -2,7 +2,12 @@ use super::CommandContext;
 use crate::error::bail;
 use crate::terminal::exec_tmux_attach;
 
-pub(crate) fn execute(ctx: &CommandContext, profile: &str, detach: bool) -> crate::error::Result {
+pub(crate) fn execute(
+    ctx: &CommandContext,
+    profile: &str,
+    tab: Option<u32>,
+    detach: bool,
+) -> crate::error::Result {
     let profiles = ctx.muster.list_profiles()?;
     let found = profiles
         .iter()
@@ -14,6 +19,10 @@ pub(crate) fn execute(ctx: &CommandContext, profile: &str, detach: bool) -> crat
     let profile_id = p.id.clone();
 
     let info = ctx.muster.launch(&profile_id)?;
+
+    if let Some(idx) = tab {
+        ctx.muster.switch_window(&info.session_name, idx)?;
+    }
 
     if ctx.json {
         println!("{}", serde_json::to_string_pretty(&info)?);

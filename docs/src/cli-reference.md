@@ -7,7 +7,6 @@ This document contains the help content for the `muster` command-line program.
 * [`muster`↴](#muster)
 * [`muster list`↴](#muster-list)
 * [`muster up`↴](#muster-up)
-* [`muster attach`↴](#muster-attach)
 * [`muster down`↴](#muster-down)
 * [`muster new`↴](#muster-new)
 * [`muster color`↴](#muster-color)
@@ -45,7 +44,6 @@ Muster organizes terminal sessions into named, color-coded groups with saved pro
 
 * `list` — List profiles and running sessions
 * `up` — Create or attach to a profile's session
-* `attach` — Attach to a running session
 * `down` — Destroy a session
 * `new` — Create an ad-hoc session
 * `color` — Manage session colors
@@ -54,8 +52,8 @@ Muster organizes terminal sessions into named, color-coded groups with saved pro
 * `top` — Show resource usage (CPU, memory, GPU) for session processes
 * `status` — Show all sessions with details
 * `peek` — Peek at recent terminal output
-* `pin` — Pin the current window to the session's profile
-* `unpin` — Unpin the current window from the session's profile
+* `pin` — Pin the current tab to the session's profile
+* `unpin` — Unpin the current tab from the session's profile
 * `profile` — Profile management
 * `notifications` — Notification management
 * `settings` — Show or update settings
@@ -87,23 +85,8 @@ Create or attach to a profile's session
 
 ###### **Options:**
 
+* `--tab <TAB>` — Switch to this tab index on attach
 * `--detach` — Create session but don't attach
-
-
-
-## `muster attach`
-
-Attach to a running session
-
-**Usage:** `muster attach [OPTIONS] <SESSION>`
-
-###### **Arguments:**
-
-* `<SESSION>` — Profile name, ID, or session name
-
-###### **Options:**
-
-* `--window <WINDOW>` — Window index to switch to
 
 
 
@@ -204,16 +187,16 @@ Show all sessions with details
 
 Peek at recent terminal output
 
-**Usage:** `muster peek [OPTIONS] <SESSION> [WINDOWS]...`
+**Usage:** `muster peek [OPTIONS] <SESSION> [TABS]...`
 
 ###### **Arguments:**
 
 * `<SESSION>` — Profile name, ID, or session name
-* `<WINDOWS>` — Window names to show (all if omitted)
+* `<TABS>` — Tab names to show (all if omitted)
 
 ###### **Options:**
 
-* `-n`, `--lines <LINES>` — Lines of output per window
+* `-n`, `--lines <LINES>` — Lines of output per tab
 
   Default value: `50`
 
@@ -221,7 +204,7 @@ Peek at recent terminal output
 
 ## `muster pin`
 
-Pin the current window to the session's profile
+Pin the current tab to the session's profile
 
 **Usage:** `muster pin`
 
@@ -229,7 +212,7 @@ Pin the current window to the session's profile
 
 ## `muster unpin`
 
-Unpin the current window from the session's profile
+Unpin the current tab from the session's profile
 
 **Usage:** `muster unpin`
 

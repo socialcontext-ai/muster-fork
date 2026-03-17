@@ -4,11 +4,11 @@ use crate::terminal::exec_tmux_attach;
 pub(crate) fn execute(
     ctx: &CommandContext,
     session: &str,
-    window: Option<u32>,
+    tab: Option<u32>,
 ) -> crate::error::Result {
     let session_name = ctx.muster.resolve_session(session)?;
 
-    if let Some(idx) = window {
+    if let Some(idx) = tab {
         ctx.muster.switch_window(&session_name, idx)?;
     }
 

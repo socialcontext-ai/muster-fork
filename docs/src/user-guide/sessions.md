@@ -8,13 +8,16 @@ Sessions are running tmux sessions managed by muster.
 # From a profile (creates or reattaches)
 muster up webapp
 
+# Attach and switch to a specific tab
+muster up webapp --tab 2
+
 # Create without attaching
 muster up webapp --detach
 ```
 
 `up` is idempotent — if the session already exists, it attaches. If not, it creates from the profile and attaches.
 
-`up` and `attach` replace the current process with `exec tmux attach`. Use `--detach` to create the session in the background without attaching.
+`up` replaces the current process with `exec tmux attach`. Use `--detach` to create the session in the background without attaching.
 
 ## Ad-hoc Sessions
 
@@ -27,20 +30,10 @@ muster new scratch --detach
 
 If `--tab` is omitted, defaults to a single "Shell" tab at `$HOME`.
 
-## Attaching
-
-```bash
-# By profile name or session name
-muster attach webapp
-
-# Switch to a specific window on attach
-muster attach webapp --window 2
-```
-
 ## Status
 
 ```bash
-# Show all sessions with window details
+# Show all sessions with tab details
 muster status
 
 # List profiles and running sessions

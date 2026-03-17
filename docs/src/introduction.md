@@ -4,7 +4,7 @@ Muster is a Rust library and CLI for terminal session group management built on 
 
 ## What Muster Does
 
-- **Organizes terminals by project** — group related terminal windows (shell, server, logs) into a single named session
+- **Organizes terminals by project** — group related tabs (shell, server, logs) into a single named session
 - **Saves profiles** — define reusable templates for your project setups
 - **Applies color themes** — each group gets a distinct color in the tmux status bar
 - **Syncs state via tmux** — no polling, no stale state files; tmux is the single source of truth
@@ -12,7 +12,7 @@ Muster is a Rust library and CLI for terminal session group management built on 
 
 ## Who It's For
 
-Developers who work across multiple projects and maintain numerous terminal sessions — development servers, test runners, build watchers — spread across many windows with no organizational structure. Muster turns that chaos into named, color-coded groups you can launch, switch between, and tear down with single commands.
+Developers who work across multiple projects and maintain numerous terminal sessions — development servers, test runners, build watchers — spread across many terminal tabs with no organizational structure. Muster turns that chaos into named, color-coded groups you can launch, switch between, and tear down with single commands.
 
 ## How It Works
 

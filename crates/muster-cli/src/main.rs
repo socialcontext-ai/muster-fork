@@ -39,8 +39,8 @@ fn run() -> error::Result {
 
     match cli.command {
         Command::List => commands::list::execute(&ctx),
-        Command::Up { profile, detach } => commands::launch::execute(&ctx, &profile, detach),
-        Command::Attach { session, window } => commands::attach::execute(&ctx, &session, window),
+        Command::Up { profile, tab, detach } => commands::launch::execute(&ctx, &profile, tab, detach),
+        Command::Attach { session, tab } => commands::attach::execute(&ctx, &session, tab),
         Command::Down { session } => commands::kill::execute(&ctx, &session),
         Command::New {
             name,
@@ -59,9 +59,9 @@ fn run() -> error::Result {
         Command::Status => commands::status::execute(&ctx),
         Command::Peek {
             session,
-            windows,
+            tabs,
             lines,
-        } => commands::peek::execute(&ctx, &session, &windows, lines),
+        } => commands::peek::execute(&ctx, &session, &tabs, lines),
         Command::Pin => commands::pin::execute_pin(&ctx),
         Command::Unpin => commands::pin::execute_unpin(&ctx),
         Command::SyncRename {

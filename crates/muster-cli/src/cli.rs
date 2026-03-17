@@ -39,18 +39,22 @@ pub enum Command {
     Up {
         /// Profile name or ID
         profile: String,
+        /// Switch to this tab index on attach
+        #[arg(long)]
+        tab: Option<u32>,
         /// Create session but don't attach
         #[arg(long)]
         detach: bool,
     },
 
     /// Attach to a running session
+    #[command(hide = true)]
     Attach {
         /// Profile name, ID, or session name
         session: String,
-        /// Window index to switch to
+        /// Tab index to switch to
         #[arg(long)]
-        window: Option<u32>,
+        tab: Option<u32>,
     },
 
     /// Destroy a session
@@ -111,17 +115,18 @@ pub enum Command {
     Peek {
         /// Profile name, ID, or session name
         session: String,
-        /// Window names to show (all if omitted)
-        windows: Vec<String>,
-        /// Lines of output per window
+        /// Tab names to show (all if omitted)
+        #[arg(value_name = "TABS")]
+        tabs: Vec<String>,
+        /// Lines of output per tab
         #[arg(short = 'n', long, default_value = "50")]
         lines: u32,
     },
 
-    /// Pin the current window to the session's profile
+    /// Pin the current tab to the session's profile
     Pin,
 
-    /// Unpin the current window from the session's profile
+    /// Unpin the current tab from the session's profile
     Unpin,
 
     /// Sync a window rename to the profile (called by tmux hook)

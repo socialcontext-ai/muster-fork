@@ -35,7 +35,7 @@ Integration tests create sessions with unique names and clean up after themselve
 - Control mode stream parser (given raw control mode output, verify parsed events)
 
 **Integration tests (tmux required):**
-- Session lifecycle: create from profile, verify windows exist, destroy
+- Session lifecycle: create from profile, verify tabs exist, destroy
 - Tab operations: add, close, rename, verify via tmux queries
 - Theme application: set color, verify tmux options
 - Control mode: connect, receive events on window add/close

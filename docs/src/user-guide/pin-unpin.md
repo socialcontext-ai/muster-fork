@@ -1,6 +1,6 @@
 # Pin & Unpin
 
-Pin and unpin sync the current tmux window state back to the session's profile.
+Pin and unpin sync the current tab's state back to the session's profile.
 
 ## Pin
 
@@ -8,7 +8,7 @@ Pin and unpin sync the current tmux window state back to the session's profile.
 muster pin
 ```
 
-Run this from inside a muster-managed tmux session. It saves the current window's name, working directory, and command to the session's profile. This is useful when you've customized a window at runtime and want those changes persisted.
+Run this from inside a muster-managed tmux session. It saves the current tab's name, working directory, and command to the session's profile. This is useful when you've customized a tab at runtime and want those changes persisted.
 
 ## Unpin
 
@@ -16,8 +16,8 @@ Run this from inside a muster-managed tmux session. It saves the current window'
 muster unpin
 ```
 
-Removes the current window from the session's profile. The window continues to exist in the running session but won't be recreated when the profile is launched again.
+Removes the current tab from the session's profile. The tab continues to exist in the running session but won't be recreated when the profile is run again.
 
-## Window Rename Sync
+## Tab Rename Sync
 
-Muster installs a tmux hook that automatically syncs window renames to the profile when a window is pinned. This means renaming a tab with `Ctrl-b ,` (tmux's rename-window) updates the profile if the window is pinned.
+Muster installs a tmux hook that automatically syncs tab renames to the profile when a tab is pinned. This means renaming a tab with `Ctrl-b ,` updates the profile if the tab is pinned.
