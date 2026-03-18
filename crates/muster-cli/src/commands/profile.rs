@@ -190,7 +190,12 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             .or_else(|_| std::env::var("VISUAL"))
             .unwrap_or_else(|_| "vi".to_string());
 
-        let status = process::Command::new(&editor).arg(tmp.path()).status()?;
+        let status = process::Command::new(&editor)
+            .arg(tmp.path())
+            .status()
+            .map_err(|e| {
+                crate::error::CliError::User(format!("failed to launch editor \"{editor}\": {e}"))
+            })?;
 
         if !status.success() {
             bail!("Editor exited with non-zero status");
