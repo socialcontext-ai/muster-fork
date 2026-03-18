@@ -136,12 +136,12 @@ A profile is a template for creating a terminal group. It does not represent a r
       "tabs": [
         {
           "name": "Shell",
-          "cwd": "/Users/sbb/work/pkm",
+          "cwd": "/home/user/projects/pkm",
           "command": null
         },
         {
           "name": "Server",
-          "cwd": "/Users/sbb/work/pkm/tauri-md-browser",
+          "cwd": "/home/user/projects/pkm/tauri-md-browser",
           "command": "npm run tauri dev"
         }
       ]

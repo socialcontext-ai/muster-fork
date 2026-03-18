@@ -627,17 +627,17 @@ mod tests {
 
     #[test]
     fn test_parse_window_list() {
-        let output = "0\tShell\t/Users/sbb/work\t1\n1\tServer\t/Users/sbb/work/app\t0\n";
+        let output = "0\tShell\t/home/user/project\t1\n1\tServer\t/home/user/project/app\t0\n";
         let windows = TmuxClient::parse_window_list(output);
 
         assert_eq!(windows.len(), 2);
         assert_eq!(windows[0].index, 0);
         assert_eq!(windows[0].name, "Shell");
-        assert_eq!(windows[0].cwd, "/Users/sbb/work");
+        assert_eq!(windows[0].cwd, "/home/user/project");
         assert!(windows[0].active);
         assert_eq!(windows[1].index, 1);
         assert_eq!(windows[1].name, "Server");
-        assert_eq!(windows[1].cwd, "/Users/sbb/work/app");
+        assert_eq!(windows[1].cwd, "/home/user/project/app");
         assert!(!windows[1].active);
     }
 
@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_parse_pane_list() {
-        let output = "%0\t0\t0\t12345\tfish\t/Users/sbb/work\n%1\t1\t0\t12400\tbash\t/tmp\n%2\t1\t1\t12410\tvim\t/tmp\n";
+        let output = "%0\t0\t0\t12345\tfish\t/home/user/project\n%1\t1\t0\t12400\tbash\t/tmp\n%2\t1\t1\t12410\tvim\t/tmp\n";
         let panes = TmuxClient::parse_pane_list(output);
 
         assert_eq!(panes.len(), 3);
@@ -658,7 +658,7 @@ mod tests {
         assert_eq!(panes[0].index, 0);
         assert_eq!(panes[0].pid, 12345);
         assert_eq!(panes[0].command, "fish");
-        assert_eq!(panes[0].cwd, "/Users/sbb/work");
+        assert_eq!(panes[0].cwd, "/home/user/project");
         assert_eq!(panes[1].pane_id, "%1");
         assert_eq!(panes[1].window_index, 1);
         assert_eq!(panes[1].pid, 12400);
