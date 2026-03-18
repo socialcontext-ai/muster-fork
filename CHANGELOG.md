@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.5.2] - 2026-03-18
+
+### Fixed
+- `muster profile edit` now reports which editor binary failed instead of a bare
+  "No such file or directory" OS error ([#1]).
+- `muster profile save` updates an existing profile instead of erroring with
+  "duplicate profile" when the name already exists, supporting the natural workflow
+  of `muster new foo` → `muster profile save foo --from-session foo` ([#2]).
+
+[#1]: https://github.com/scott2b/muster/issues/1
+[#2]: https://github.com/scott2b/muster/issues/2
+
+---
+
 ## [0.5.1] - 2026-03-18
 
 ### Fixed
