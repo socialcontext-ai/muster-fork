@@ -82,7 +82,14 @@ pub(crate) fn execute_save(
         ..muster::Profile::default()
     };
 
-    let saved = ctx.muster.save_profile(profile)?;
+    // Update existing profile if one already exists with this name/id,
+    // otherwise create a new one. This handles the common workflow of
+    // `muster new foo` followed by `muster profile save foo --from-session foo`.
+    let saved = match ctx.muster.save_profile(profile.clone()) {
+        Ok(p) => p,
+        Err(muster::Error::DuplicateProfile(_)) => ctx.muster.update_profile(profile)?,
+        Err(e) => return Err(e.into()),
+    };
 
     // Pin the live session's windows now that the profile exists
     if let Some(session_name) = live_session {
