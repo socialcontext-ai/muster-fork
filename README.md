@@ -10,6 +10,12 @@ Terminal session group management built on tmux. A Rust library and CLI for orga
 ## Installation
 
 ```bash
+cargo install muster-cli
+```
+
+Or from source:
+
+```bash
 cargo install --path crates/muster-cli
 ```
 
