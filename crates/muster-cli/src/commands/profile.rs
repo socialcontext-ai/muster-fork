@@ -189,9 +189,20 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
     let toml_str = toml::to_string_pretty(&editable)?;
 
     let saved = loop {
-        let mut tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
-        tmp.write_all(toml_str.as_bytes())?;
-        tmp.flush()?;
+        let mut tmp = tempfile::Builder::new()
+            .suffix(".toml")
+            .tempfile()
+            .map_err(|e| {
+                crate::error::CliError::User(format!(
+                    "failed to create temp file (check $TMPDIR permissions): {e}"
+                ))
+            })?;
+        tmp.write_all(toml_str.as_bytes()).map_err(|e| {
+            crate::error::CliError::User(format!("failed to write temp file: {e}"))
+        })?;
+        tmp.flush().map_err(|e| {
+            crate::error::CliError::User(format!("failed to write temp file: {e}"))
+        })?;
 
         let editor = std::env::var("EDITOR")
             .or_else(|_| std::env::var("VISUAL"))
@@ -208,7 +219,11 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             bail!("Editor exited with non-zero status");
         }
 
-        let content = std::fs::read_to_string(tmp.path())?;
+        let content = std::fs::read_to_string(tmp.path()).map_err(|e| {
+            crate::error::CliError::User(format!(
+                "failed to read back temp file after editing: {e}"
+            ))
+        })?;
         let parsed: EditableProfile = match toml::from_str(&content) {
             Ok(p) => p,
             Err(e) => {
