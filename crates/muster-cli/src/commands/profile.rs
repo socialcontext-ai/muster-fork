@@ -182,7 +182,14 @@ pub(crate) fn execute_show(ctx: &CommandContext, id: &str) -> crate::error::Resu
 /// The `profile edit` command uses an interactive retry loop with user prompts.
 /// `process::exit` is appropriate here for user-initiated aborts since we're
 /// in the middle of an interactive dialogue that can't be expressed as `Err`.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Result {
+    let profiles_file = ctx.muster.config_dir().join("profiles.json");
+    let workaround_hint = format!(
+        "Workaround: edit the profiles file directly at {}",
+        profiles_file.display()
+    );
+
     let p = resolve_profile(&ctx.muster, id)?;
     let old_id = p.id.clone();
     let editable = EditableProfile::from(&p);
@@ -194,14 +201,18 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             .tempfile()
             .map_err(|e| {
                 crate::error::CliError::User(format!(
-                    "failed to create temp file (check $TMPDIR permissions): {e}"
+                    "failed to create temp file: {e}\n{workaround_hint}"
                 ))
             })?;
         tmp.write_all(toml_str.as_bytes()).map_err(|e| {
-            crate::error::CliError::User(format!("failed to write temp file: {e}"))
+            crate::error::CliError::User(format!(
+                "failed to write temp file: {e}\n{workaround_hint}"
+            ))
         })?;
         tmp.flush().map_err(|e| {
-            crate::error::CliError::User(format!("failed to write temp file: {e}"))
+            crate::error::CliError::User(format!(
+                "failed to write temp file: {e}\n{workaround_hint}"
+            ))
         })?;
 
         let editor_raw = std::env::var("EDITOR")
@@ -219,17 +230,22 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             .status()
             .map_err(|e| {
                 crate::error::CliError::User(format!(
-                    "failed to launch editor \"{editor_bin}\": {e}"
+                    "failed to launch editor \"{editor_bin}\": {e}\n\
+                     Check that $EDITOR is set to a valid executable.\n\
+                     Current value: EDITOR=\"{editor_raw}\"\n\
+                     {workaround_hint}"
                 ))
             })?;
 
         if !status.success() {
-            bail!("Editor exited with non-zero status");
+            bail!(
+                "Editor \"{editor_bin}\" exited with non-zero status.\n{workaround_hint}"
+            );
         }
 
         let content = std::fs::read_to_string(tmp.path()).map_err(|e| {
             crate::error::CliError::User(format!(
-                "failed to read back temp file after editing: {e}"
+                "failed to read temp file after editing: {e}\n{workaround_hint}"
             ))
         })?;
         let parsed: EditableProfile = match toml::from_str(&content) {
@@ -240,6 +256,7 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
                 let mut answer = String::new();
                 std::io::stdin().read_line(&mut answer)?;
                 if answer.trim().eq_ignore_ascii_case("n") {
+                    eprintln!("{workaround_hint}");
                     bail!("Aborted.");
                 }
                 continue;
@@ -257,6 +274,7 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
                 let mut answer = String::new();
                 std::io::stdin().read_line(&mut answer)?;
                 if answer.trim().eq_ignore_ascii_case("n") {
+                    eprintln!("{workaround_hint}");
                     bail!("Aborted.");
                 }
                 continue;
@@ -269,6 +287,7 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             let mut answer = String::new();
             std::io::stdin().read_line(&mut answer)?;
             if answer.trim().eq_ignore_ascii_case("n") {
+                eprintln!("{workaround_hint}");
                 bail!("Aborted.");
             }
             continue;
