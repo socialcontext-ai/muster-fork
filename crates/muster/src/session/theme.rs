@@ -211,7 +211,7 @@ impl ThemeValues {
         })
     }
 
-    /// Session-level options (status bar, position, mouse).
+    /// Session-level options (status bar styling).
     pub(crate) fn session_commands(&self, session: &str) -> Vec<Vec<String>> {
         vec![
             vec![
@@ -230,20 +230,6 @@ impl ThemeValues {
                     "#[bg={},fg=#ffffff,bold] {} #[default]",
                     self.darker, self.display_name
                 ),
-            ],
-            vec![
-                "set-option".into(),
-                "-t".into(),
-                session.into(),
-                "status-position".into(),
-                "top".into(),
-            ],
-            vec![
-                "set-option".into(),
-                "-t".into(),
-                session.into(),
-                "mouse".into(),
-                "on".into(),
             ],
         ]
     }
@@ -408,8 +394,6 @@ pub(crate) fn build_release_commands(session: &str, window_indices: &[u32]) -> V
     let session_opts = [
         "status-style",
         "status-left",
-        "status-position",
-        "mouse",
         "default-command",
         "@muster_name",
         "@muster_color",
@@ -667,7 +651,7 @@ mod tests {
     #[test]
     fn test_build_theme_commands() {
         let commands = build_theme_commands("muster_test", "#f97316", "PKM Project").unwrap();
-        assert_eq!(commands.len(), 7);
+        assert_eq!(commands.len(), 5);
 
         // Session options come first
         assert_eq!(commands[0][3], "status-style");
@@ -677,21 +661,15 @@ mod tests {
         assert!(commands[1][4].contains("PKM Project"));
         assert!(commands[1][4].contains("#532607")); // dimmed
 
-        assert_eq!(commands[2][3], "status-position");
-        assert_eq!(commands[2][4], "top");
-
-        assert_eq!(commands[3][3], "mouse");
-        assert_eq!(commands[3][4], "on");
-
         // Window options follow
-        assert_eq!(commands[4][3], "window-status-format");
-        assert!(commands[4][4].contains("#f97316"));
+        assert_eq!(commands[2][3], "window-status-format");
+        assert!(commands[2][4].contains("#f97316"));
 
-        assert_eq!(commands[5][3], "window-status-current-format");
-        assert!(commands[5][4].contains("#f97316"));
-        assert!(commands[5][4].contains("bg=#000000"));
+        assert_eq!(commands[3][3], "window-status-current-format");
+        assert!(commands[3][4].contains("#f97316"));
+        assert!(commands[3][4].contains("bg=#000000"));
 
-        assert_eq!(commands[6][3], "window-status-separator");
+        assert_eq!(commands[4][3], "window-status-separator");
     }
 
     #[test]
@@ -722,9 +700,9 @@ mod tests {
 
         // Verify a tmux option was set
         let output = client
-            .cmd(&["show-option", "-t", &session_name, "-v", "status-position"])
+            .cmd(&["show-option", "-t", &session_name, "-v", "status-style"])
             .unwrap();
-        assert_eq!(output.trim(), "top");
+        assert!(output.contains("bg=#f97316"));
 
         client.kill_session(&session_name).ok();
     }

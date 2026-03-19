@@ -21,20 +21,6 @@ expression: commands
     "set-option",
     "-t",
     "muster_test",
-    "status-position",
-    "top"
-  ],
-  [
-    "set-option",
-    "-t",
-    "muster_test",
-    "mouse",
-    "on"
-  ],
-  [
-    "set-option",
-    "-t",
-    "muster_test",
     "window-status-format",
     "#[bg=#f97316,fg=#000000]  #I: #W #{?#{@muster_layout_stale},#[fg=#c4a000]● ,}"
   ],

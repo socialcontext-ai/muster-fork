@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.5.5] - 2026-03-19
+
+### Changed
+- Muster no longer sets `mouse on` or `status-position top` on managed sessions.
+  These are now left to the user's `~/.tmux.conf` or per-profile `tmux_options`.
+  `mouse on` in tmux causes right-click menus to dismiss immediately and changes
+  selection behavior — users who want clickable tabs can enable it explicitly.
+- Added "Tmux Options Set by Muster" documentation section explaining which
+  options muster sets, why they're required, and which options are intentionally
+  left to the user.
+
+---
+
 ## [0.5.4] - 2026-03-19
 
 ### Fixed
