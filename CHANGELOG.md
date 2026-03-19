@@ -7,15 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.5.4] - 2026-03-19
 
 ### Fixed
 - `muster ports` no longer shows duplicate entries when a process listens on both
   IPv4 and IPv6 for the same port. Deduplicates by (port, pid) ([#4]).
+- `muster profile edit` now splits `$EDITOR` on whitespace so values like
+  `"code --wait"` work correctly instead of treating the entire string as a
+  binary path ([#1]).
+- `muster profile edit` error messages now include the specific operation that
+  failed, the current `$EDITOR` value, and the path to `profiles.json` as a
+  direct-edit workaround.
 
 ### Changed
 - `muster ports` output now includes PID column and a header row for readability.
 
+[#1]: https://github.com/scott2b/muster/issues/1
 [#4]: https://github.com/scott2b/muster/issues/4
 
 ---

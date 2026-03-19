@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "muster"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "dirs",
  "insta",
@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "muster-cli"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "muster-notify"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "block2",
  "objc2",
