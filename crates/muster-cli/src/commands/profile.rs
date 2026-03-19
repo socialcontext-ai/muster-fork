@@ -204,15 +204,23 @@ pub(crate) fn execute_edit(ctx: &CommandContext, id: &str) -> crate::error::Resu
             crate::error::CliError::User(format!("failed to write temp file: {e}"))
         })?;
 
-        let editor = std::env::var("EDITOR")
+        let editor_raw = std::env::var("EDITOR")
             .or_else(|_| std::env::var("VISUAL"))
             .unwrap_or_else(|_| "vi".to_string());
 
-        let status = process::Command::new(&editor)
+        // Split $EDITOR into binary + args (e.g. "code --wait" → ["code", "--wait"])
+        let mut editor_parts = editor_raw.split_whitespace();
+        let editor_bin = editor_parts.next().unwrap_or("vi");
+        let editor_args: Vec<&str> = editor_parts.collect();
+
+        let status = process::Command::new(editor_bin)
+            .args(&editor_args)
             .arg(tmp.path())
             .status()
             .map_err(|e| {
-                crate::error::CliError::User(format!("failed to launch editor \"{editor}\": {e}"))
+                crate::error::CliError::User(format!(
+                    "failed to launch editor \"{editor_bin}\": {e}"
+                ))
             })?;
 
         if !status.success() {
