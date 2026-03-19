@@ -7,6 +7,18 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.5.3] - 2026-03-19
+
+### Fixed
+- `muster profile edit` now provides contextual error messages for all failure
+  points: temp file creation, writing, editor launch, and reading back. Previously
+  all of these surfaced as a bare OS error with no indication of which step failed
+  ([#1]).
+
+[#1-2]: https://github.com/scott2b/muster/issues/1
+
+---
+
 ## [0.5.2] - 2026-03-18
 
 ### Fixed
